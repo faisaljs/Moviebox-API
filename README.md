@@ -360,6 +360,7 @@ Upstream sends `null` where you'd expect an object (`{ "cover": null }`). Every 
 ├── requirements.txt   # fastapi, uvicorn, httpx
 ├── verify.py          # live integration test — chains real requests
 ├── README.md
+├── CONTRIBUTING.md
 ├── .env.example
 └── .gitignore
 ```
@@ -414,6 +415,8 @@ Not implemented, but the shape of the code makes them easy:
 - **Aggregate home feed** — flatten all sections from `/home` into a single deduplicated list.
 - **Search across catalogs** — client-side merge of `/search` results with local filtering by year, rating, genre.
 - **Redis-backed cache** — replace the module globals with a shared cache if you run multi-instance.
+
+If you build any of these, PRs welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
