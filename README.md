@@ -17,7 +17,7 @@ No scraping. No HTML parsing. No headless browser. It talks the exact same priva
 
 Built for people who want to wire moviebox into their own apps, scripts, bots, dashboards, or media servers without reverse-engineering the network tab every time the site ships an update.
 
-**Version 2.7.0** — module split, provider failover, FTS5 search, trailer playback, continue-watching row.
+**Version 2.8.0** — local CLI installer and launcher, alongside provider failover, FTS5 search, trailer playback, and continue-watching.
 
 ---
 
@@ -344,7 +344,7 @@ Live provider state:
 ```json
 {
   "status": "ok",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "default_host": "moviebox.ph",
   "providers": {
     "moviebox.ph": {
@@ -594,6 +594,8 @@ Upstream `/subject/search` is relevance-ranked, not exhaustive. `Matrix` isn't i
 ---
 
 ## Changelog
+
+**v2.8.0** — per-user `moviebox` CLI installer, local-only server startup, browser launch, and cleaner terminal output.
 
 **v2.7.0** — module split (10 files), provider failover with per-host circuit breakers, multi-host detection, `/providers` + `/providers/probe` + `/providers/reset`, FTS5 catalog search, trailer playback on detail pages, continue-watching row on home, SQLite integrity check on boot.
 

@@ -6,7 +6,7 @@ License: MIT
 
 import os
 
-API_VERSION = "2.7.0"
+API_VERSION = "2.8.0"
 
 PORT = int(os.environ.get("PORT", "8000"))
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "25"))
