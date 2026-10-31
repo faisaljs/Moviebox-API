@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -25,16 +27,52 @@ def _port_is_available(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) != 0
 
 
-def _open_browser_when_ready(server, url: str) -> None:
+def _paint(text: str, color: str) -> str:
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"\033[{color}m{text}\033[0m"
+
+
+def _open_url(url: str) -> bool:
+    # Detach the desktop opener so browser diagnostics do not clutter the CLI.
+    opener = shutil.which("xdg-open") or shutil.which("open")
+    if opener:
+        try:
+            subprocess.Popen(
+                [opener, url],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return True
+        except OSError:
+            pass
+    try:
+        return webbrowser.open(url)
+    except Exception:
+        return False
+
+
+def _open_browser_when_ready(server, url: str, open_browser: bool) -> None:
     while not server.started and not server.should_exit:
         time.sleep(0.1)
     if server.started and not server.should_exit:
-        print(f"MovieBox is ready at {url}", flush=True)
-        try:
-            webbrowser.open(url)
-        except Exception as exc:
-            print(f"Could not open a browser automatically: {exc}", file=sys.stderr)
-            print(f"Open {url} in your browser.", file=sys.stderr)
+        opened = _open_url(url) if open_browser else None
+        if opened is None:
+            browser_message = "Browser opening disabled"
+        elif opened:
+            browser_message = "Browser opened"
+        else:
+            browser_message = "Open this address in your browser"
+        print("", flush=True)
+        print(_paint("  ┌─────────────────────────────────────┐", "38;5;205"), flush=True)
+        print(_paint("  │  MOVIEBOX                            │", "38;5;205;1"), flush=True)
+        print(_paint("  ├─────────────────────────────────────┤", "38;5;205"), flush=True)
+        print(f"  │  App      {url:<26} │", flush=True)
+        print(f"  │  {browser_message:<37} │", flush=True)
+        print(_paint("  └─────────────────────────────────────┘", "38;5;205"), flush=True)
+        print("  Press Ctrl+C to stop.\n", flush=True)
 
 
 def main() -> int:
@@ -95,19 +133,19 @@ def main() -> int:
         app_module.app,
         host=args.host,
         port=args.port,
-        log_level="info",
+        log_level="warning",
+        access_log=False,
     )
     server = uvicorn.Server(config)
     url = f"http://{browser_host}:{args.port}/app"
 
-    if not args.no_browser:
-        threading.Thread(
-            target=_open_browser_when_ready,
-            args=(server, url),
-            daemon=True,
-        ).start()
+    threading.Thread(
+        target=_open_browser_when_ready,
+        args=(server, url, not args.no_browser),
+        daemon=True,
+    ).start()
 
-    print("Starting MovieBox. Press Ctrl+C to stop.", flush=True)
+    print(_paint("Starting MovieBox...", "38;5;205;1"), flush=True)
     try:
         server.run()
     except KeyboardInterrupt:
