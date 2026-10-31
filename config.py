@@ -5,6 +5,9 @@ License: MIT
 """
 
 import os
+from env_loader import load_environment
+
+load_environment()
 
 API_VERSION = "2.8.0"
 

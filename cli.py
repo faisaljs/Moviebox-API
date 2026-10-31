@@ -13,6 +13,10 @@ import time
 import webbrowser
 from pathlib import Path
 
+from env_loader import load_environment
+
+load_environment()
+
 
 APP_DIR = Path(__file__).resolve().parent
 

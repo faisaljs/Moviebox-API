@@ -92,6 +92,11 @@ and stays in the terminal until you press Ctrl+C. The catalog database is stored
 in the same per-user data directory. Use `moviebox --no-browser` to skip opening
 the page, or `moviebox --port 8001` if port 8000 is already in use.
 
+The app reads `.env` from the current directory, then
+`$XDG_CONFIG_HOME/moviebox/.env`, then the app source directory. Set
+`MOVIEBOX_ENV_FILE` to choose a specific file. Variables already exported in
+the shell take precedence over values from the file.
+
 To try the `cli-beta` branch before it is merged:
 
 ```bash
@@ -532,6 +537,7 @@ See `.env.example` for the full list with defaults. Key variables:
 | `PORT`                          | `8000`        | Listen port                                       |
 | `RELOAD`                        | `0`           | `1` enables autoreload (dev)                      |
 | `REQUEST_TIMEOUT`               | `25`          | Upstream timeout, seconds                         |
+| `MOVIEBOX_BIND_HOST`            | `127.0.0.1`   | Bind address for the `moviebox` CLI               |
 | `CATALOG_DB`                    | `catalog.db`  | SQLite path                                       |
 | `CATALOG_REFRESH_INTERVAL`      | `21600`       | Walk re-run interval (6h)                         |
 | `CATALOG_MAX_PAGES_PER_KEYWORD` | `50`          | Bump to 200 for deeper keyword coverage           |
@@ -542,7 +548,9 @@ See `.env.example` for the full list with defaults. Key variables:
 | `CIRCUIT_BREAKER_THRESHOLD`     | `3`           | Failures before host opens                        |
 | `CIRCUIT_BREAKER_SECONDS`       | `60`          | How long host stays open                          |
 
-No config file. `set -a && source .env && set +a && python main.py` or `docker compose up`.
+Copy `.env.example` to `.env` to configure local runs. The app loads it
+automatically; exported shell variables take precedence. Docker Compose also
+passes `.env` into the container.
 
 ---
 
