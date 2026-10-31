@@ -97,10 +97,10 @@ The app reads `.env` from the current directory, then
 `MOVIEBOX_ENV_FILE` to choose a specific file. Variables already exported in
 the shell take precedence over values from the file.
 
-To try the `cli-beta` branch before it is merged:
+To update an existing installation, rerun the installer from `main`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/faisaljs/Moviebox-API/cli-beta/install.sh | MOVIEBOX_REF=cli-beta sh
+curl -fsSL https://raw.githubusercontent.com/faisaljs/Moviebox-API/main/install.sh | sh
 ```
 
 The first boot kicks off the catalog walk in the background. It takes 2–3 minutes to populate ~1700 rows and enrich the type fields. `/catalog/stats` shows progress.
@@ -603,7 +603,7 @@ Upstream `/subject/search` is relevance-ranked, not exhaustive. `Matrix` isn't i
 
 ## Changelog
 
-**v2.8.0** — per-user `moviebox` CLI installer, local-only server startup, browser launch, and cleaner terminal output.
+**v2.8.0** — per-user `moviebox` CLI installer, local-only server startup, browser launch, cleaner terminal output, and automatic `.env` loading.
 
 **v2.7.0** — module split (10 files), provider failover with per-host circuit breakers, multi-host detection, `/providers` + `/providers/probe` + `/providers/reset`, FTS5 catalog search, trailer playback on detail pages, continue-watching row on home, SQLite integrity check on boot.
 
