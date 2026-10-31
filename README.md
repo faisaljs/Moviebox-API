@@ -76,6 +76,28 @@ Docker:
 docker compose up -d
 ```
 
+### Install the local CLI
+
+On macOS or Linux with Python 3, `curl`, and `tar` installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/faisaljs/Moviebox-API/main/install.sh | sh
+moviebox
+```
+
+The installer keeps the app and its Python environment under
+`~/.local/share/moviebox`, and puts the `moviebox` launcher in `~/.local/bin`.
+The command starts the server on `127.0.0.1:8000`, opens `/app` in your browser,
+and stays in the terminal until you press Ctrl+C. The catalog database is stored
+in the same per-user data directory. Use `moviebox --no-browser` to skip opening
+the page, or `moviebox --port 8001` if port 8000 is already in use.
+
+To try the `cli-beta` branch before it is merged:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/faisaljs/Moviebox-API/cli-beta/install.sh | MOVIEBOX_REF=cli-beta sh
+```
+
 The first boot kicks off the catalog walk in the background. It takes 2–3 minutes to populate ~1700 rows and enrich the type fields. `/catalog/stats` shows progress.
 
 **Single instance only.** SQLite is not multi-writer safe across processes. Two `python main.py` against one `catalog.db` corrupts it. If you're testing, `Ctrl+C` the running server before starting a new one.
