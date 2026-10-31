@@ -350,7 +350,7 @@ def _rec_item(r) -> dict:
         "rating": r["rating"],
         "year": r["year"],
         "badge": r["badge"],
-        "genre": r["genre"] if "genre" in r.keys() else None,
+        "genre": r["genre"],
         "types": [
             t for t, f in (("movie", r["is_movie"]), ("tv", r["is_tv"]), ("anime", r["is_anime"])) if f
         ],

@@ -16,18 +16,17 @@ import upstream
 from fastapi import HTTPException
 
 
-_home_cache: dict = {}  # host -> (ops, expires)
 
 
 async def get_home_operating_list(host: str | None = DEFAULT_HOST) -> list:
     h = host or DEFAULT_HOST
     now = time.time()
-    cached = _home_cache.get(h)
+    cached = state.home_cache.get(h)
     if cached and now < cached[1]:
         return cached[0]
     data = await upstream.bff_request("/home", preferred_host=host)
     ops = data.get("data", {}).get("operatingList", []) or []
-    _home_cache[h] = (ops, now + 300)
+    state.home_cache[h] = (ops, now + 300)
     return ops
 
 
@@ -177,7 +176,7 @@ def classify_from_detail(subject_type, genre: str | None) -> tuple[int, int, int
 async def enrich_subject(row) -> bool:
     sid = row["subject_id"]
     slug = row["slug"]
-    host = row["source_host"] if "source_host" in row.keys() else DEFAULT_HOST
+    host = row["source_host"] or DEFAULT_HOST
     if not slug:
         return False
     try:

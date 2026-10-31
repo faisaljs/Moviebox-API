@@ -18,14 +18,53 @@ import state
 import providers
 
 
+STREAM_CACHE_TTL = 30.0
+
+
+class _ProviderError(Exception):
+    """Internal: a single provider attempt failed. bff_request handles retry/rotation."""
+
+
+# ─── URL HELPERS ─────────────────────────────────────────────────────────────
+
 def _add_host_param(path: str, host: str) -> str:
     if "?" in path:
         base, query = path.split("?", 1)
         params = [p for p in query.split("&") if p and not p.startswith("host=")]
-        if params:
-            return f"{base}?{'&'.join(params)}&host={host}"
-        return f"{base}?host={host}"
+        return f"{base}?{'&'.join(params)}&host={host}" if params else f"{base}?host={host}"
     return f"{path}?host={host}"
+
+
+# ─── TOKEN MANAGEMENT ────────────────────────────────────────────────────────
+
+async def _fetch_token(host: str) -> str:
+    """Hit /home once, harvest token from x-user header or set-cookie."""
+    client = state.require_client()
+    try:
+        resp = await client.get(
+            f"{API_BASE}/home?host={host}",
+            headers=DEFAULT_HEADERS,
+            timeout=PROVIDER_PROBE_TIMEOUT,
+        )
+    except Exception:
+        return ""
+
+    x_user = resp.headers.get("x-user")
+    if x_user:
+        try:
+            token = json.loads(x_user).get("token")
+            if token:
+                state.bearer_tokens[host] = (token, time.time())
+                return token
+        except json.JSONDecodeError:
+            pass
+
+    cookie = resp.headers.get("set-cookie", "")
+    m = re.search(r"token=([^;]+)", cookie)
+    if m:
+        state.bearer_tokens[host] = (m.group(1), time.time())
+        return m.group(1)
+    return ""
 
 
 async def get_bearer_token(host: str) -> str:
@@ -36,30 +75,75 @@ async def get_bearer_token(host: str) -> str:
         cached = state.bearer_tokens.get(host)
         if cached:
             return cached[0]
-        client = state.require_client()
-        token = None
-        try:
-            resp = await client.get(
-                f"{API_BASE}/home?host={host}",
-                headers=DEFAULT_HEADERS,
-                timeout=PROVIDER_PROBE_TIMEOUT,
-            )
-            x_user = resp.headers.get("x-user")
-            if x_user:
-                try:
-                    token = json.loads(x_user).get("token")
-                except json.JSONDecodeError:
-                    token = None
-            if not token:
-                cookie = resp.headers.get("set-cookie", "")
-                m = re.search(r"token=([^;]+)", cookie)
-                if m:
-                    token = m.group(1)
-            if token:
-                state.bearer_tokens[host] = (token, time.time())
-        except Exception:
-            pass
-        return token or ""
+        return await _fetch_token(host)
+
+
+def _capture_rotated_token(host: str, resp: httpx.Response) -> str | None:
+    x_user = resp.headers.get("x-user")
+    if not x_user:
+        return None
+    try:
+        token = json.loads(x_user).get("token")
+        if token:
+            state.bearer_tokens[host] = (token, time.time())
+            return token
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
+# ─── ONE PROVIDER ATTEMPT ────────────────────────────────────────────────────
+
+async def _request_once(
+    url: str, method: str, payload: dict | None, headers: dict,
+) -> httpx.Response:
+    client = state.require_client()
+    try:
+        if method == "POST":
+            return await client.post(url, headers=headers, json=payload)
+        return await client.get(url, headers=headers)
+    except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as e:
+        raise _ProviderError(type(e).__name__) from e
+
+
+async def _attempt(
+    host: str, path: str, method: str, payload: dict | None,
+) -> tuple[dict, float]:
+    """Single provider attempt. Raises _ProviderError on any failure."""
+    token = await get_bearer_token(host)
+    headers = {**DEFAULT_HEADERS}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = f"{API_BASE}{_add_host_param(path, host)}"
+    start = time.time()
+
+    resp = await _request_once(url, method, payload, headers)
+    if (rotated := _capture_rotated_token(host, resp)):
+        headers["Authorization"] = f"Bearer {rotated}"
+
+    if resp.status_code == 401:
+        state.bearer_tokens.pop(host, None)
+        token = await get_bearer_token(host)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+            resp = await _request_once(url, method, payload, headers)
+            _capture_rotated_token(host, resp)
+
+    if resp.status_code == 429:
+        ra = resp.headers.get("retry-after")
+        delay = float(ra) if ra and ra.isdigit() else RETRY_BACKOFF
+        await asyncio.sleep(min(delay, 5.0))
+        resp = await _request_once(url, method, payload, headers)
+
+    if resp.status_code != 200:
+        raise _ProviderError(f"HTTP {resp.status_code}")
+
+    try:
+        data = resp.json()
+    except json.JSONDecodeError as e:
+        raise _ProviderError("non-JSON response") from e
+
+    return data, (time.time() - start) * 1000
 
 
 async def bff_request(
@@ -72,92 +156,17 @@ async def bff_request(
     candidates = providers.ordered_candidates(preferred_host, strict_host)
     if not candidates:
         raise HTTPException(503, detail="No providers available")
-    client = state.require_client()
+
     last_error: str | None = None
-
     for host in candidates:
-        token = await get_bearer_token(host)
-        headers = {**DEFAULT_HEADERS}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        url = f"{API_BASE}{_add_host_param(path, host)}"
-        start = time.time()
-
         try:
-            if method == "POST":
-                resp = await client.post(url, headers=headers, json=payload)
-            else:
-                resp = await client.get(url, headers=headers)
-        except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as e:
+            data, elapsed_ms = await _attempt(host, path, method, payload)
+        except _ProviderError as e:
             providers.mark_failure(host, str(e))
-            last_error = f"{host}: {type(e).__name__}"
+            last_error = f"{host}: {e}"
             if strict_host and host == preferred_host:
                 break
             continue
-
-        elapsed_ms = (time.time() - start) * 1000
-
-        x_user = resp.headers.get("x-user")
-        if x_user:
-            try:
-                new_token = json.loads(x_user).get("token")
-                if new_token:
-                    state.bearer_tokens[host] = (new_token, time.time())
-                    headers["Authorization"] = f"Bearer {new_token}"
-            except json.JSONDecodeError:
-                pass
-
-        if resp.status_code == 401:
-            state.bearer_tokens.pop(host, None)
-            new_token = await get_bearer_token(host)
-            if new_token:
-                headers["Authorization"] = f"Bearer {new_token}"
-                try:
-                    if method == "POST":
-                        resp = await client.post(url, headers=headers, json=payload)
-                    else:
-                        resp = await client.get(url, headers=headers)
-                    elapsed_ms = (time.time() - start) * 1000
-                except Exception as e:
-                    providers.mark_failure(host, f"401 retry: {e}")
-                    last_error = f"{host}: 401 retry failed"
-                    if strict_host and host == preferred_host:
-                        break
-                    continue
-
-        if resp.status_code == 429:
-            retry_after = resp.headers.get("retry-after")
-            delay = float(retry_after) if retry_after and retry_after.isdigit() else RETRY_BACKOFF
-            await asyncio.sleep(min(delay, 5))
-            try:
-                if method == "POST":
-                    resp = await client.post(url, headers=headers, json=payload)
-                else:
-                    resp = await client.get(url, headers=headers)
-                elapsed_ms = (time.time() - start) * 1000
-            except Exception as e:
-                providers.mark_failure(host, f"429 retry: {e}")
-                last_error = f"{host}: 429 retry failed"
-                if strict_host and host == preferred_host:
-                    break
-                continue
-
-        if resp.status_code != 200:
-            providers.mark_failure(host, f"HTTP {resp.status_code}")
-            last_error = f"{host}: HTTP {resp.status_code}"
-            if strict_host and host == preferred_host:
-                break
-            continue
-
-        try:
-            data = resp.json()
-        except json.JSONDecodeError:
-            providers.mark_failure(host, "non-JSON response")
-            last_error = f"{host}: non-JSON"
-            if strict_host and host == preferred_host:
-                break
-            continue
-
         providers.mark_success(host, elapsed_ms)
         return data
 
@@ -166,6 +175,8 @@ async def bff_request(
         detail=f"All {len(candidates)} providers failed. Last: {last_error}",
     )
 
+
+# ─── PLAYER DOMAIN ───────────────────────────────────────────────────────────
 
 async def get_player_domain(force_refresh: bool = False) -> str:
     now = time.time()
@@ -185,39 +196,49 @@ def build_player_referer(domain: str, detail_path: str, subject_id: str, se: int
     )
 
 
-async def resolve_stream(subject_id: str, detail_path: str, se: int, ep: int) -> dict:
+# ─── STREAM RESOLUTION ───────────────────────────────────────────────────────
+
+async def _play_attempt(domain: str, subject_id: str, detail_path: str, se: int, ep: int) -> dict:
     client = state.require_client()
+    referer = build_player_referer(domain, detail_path, subject_id, se, ep)
+    url = (
+        f"{domain}/wefeed-h5api-bff/subject/play"
+        f"?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}"
+    )
+    resp = await client.get(url, headers={**PLAYER_HEADERS, "Referer": referer})
+    if resp.status_code != 200:
+        raise HTTPException(502, f"player HTTP {resp.status_code}")
+    try:
+        data = resp.json().get("data", {}) or {}
+    except Exception:
+        raise HTTPException(502, "player non-JSON")
+    return {"domain": domain, "referer": referer, "data": data, "se": se, "ep": ep}
+
+
+async def _resolve_stream_uncached(
+    subject_id: str, detail_path: str, se: int, ep: int,
+) -> dict:
     last_error = "unknown"
-
-    async def _attempt(domain: str, s: int, e: int) -> dict:
-        referer = build_player_referer(domain, detail_path, subject_id, s, e)
-        play_url = (
-            f"{domain}/wefeed-h5api-bff/subject/play"
-            f"?subjectId={subject_id}&se={s}&ep={e}&detailPath={detail_path}"
-        )
-        resp = await client.get(play_url, headers={**PLAYER_HEADERS, "Referer": referer})
-        if resp.status_code != 200:
-            raise HTTPException(502, f"player HTTP {resp.status_code}")
-        try:
-            data = resp.json().get("data", {}) or {}
-        except Exception:
-            raise HTTPException(502, "player non-JSON")
-        return {"domain": domain, "referer": referer, "data": data, "se": s, "ep": e}
-
     for attempt in range(2):
         try:
             domain = await get_player_domain(force_refresh=(attempt > 0))
-            result = await _attempt(domain, se, ep)
+            result = await _play_attempt(domain, subject_id, detail_path, se, ep)
 
-            # Movie fallback: if no resource and se/ep aren't 0, retry as se=0/ep=0
+            # Movie fallback: no resource at (se, ep), retry as (0, 0).
+            # Return truthful resolved_se/resolved_ep so the route can be honest
+            # with the client about which episode actually played.
             if not result["data"].get("hasResource") and (se != 0 or ep != 0):
                 try:
-                    movie = await _attempt(domain, 0, 0)
+                    movie = await _play_attempt(domain, subject_id, detail_path, 0, 0)
                     if movie["data"].get("hasResource"):
+                        movie["resolved_se"] = 0
+                        movie["resolved_ep"] = 0
                         return movie
                 except HTTPException:
                     pass
 
+            result["resolved_se"] = se
+            result["resolved_ep"] = ep
             return result
         except HTTPException as e:
             last_error = str(e.detail)
@@ -230,6 +251,27 @@ async def resolve_stream(subject_id: str, detail_path: str, se: int, ep: int) ->
                 continue
 
     raise HTTPException(502, f"Stream resolution failed: {last_error}")
+
+
+async def resolve_stream(subject_id: str, detail_path: str, se: int, ep: int) -> dict:
+    """Memoized for STREAM_CACHE_TTL seconds. Collapses the 3x /play
+    burst (sources + captions + proxy) into one upstream hit."""
+    key = (subject_id, detail_path, se, ep)
+    now = time.time()
+
+    hit = state.stream_cache.get(key)
+    if hit and now < hit[1]:
+        return hit[0]
+
+    # evict stale entries on access — cache stays bounded to the recent burst window
+    if len(state.stream_cache) > 64:
+        stale = [k for k, v in state.stream_cache.items() if v[1] <= now]
+        for k in stale:
+            state.stream_cache.pop(k, None)
+
+    result = await _resolve_stream_uncached(subject_id, detail_path, se, ep)
+    state.stream_cache[key] = (result, now + STREAM_CACHE_TTL)
+    return result
 
 
 async def resolve_captions(subject_id: str, detail_path: str, se: int, ep: int) -> list:
