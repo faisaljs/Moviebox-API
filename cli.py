@@ -3,27 +3,119 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from pathlib import Path
 
 from env_loader import load_environment
+from config import API_VERSION
 
 load_environment()
 
 
 APP_DIR = Path(__file__).resolve().parent
+RELEASE_API = "https://api.github.com/repos/faisaljs/Moviebox-API/releases/latest"
+RELEASE_CACHE_TTL = 24 * 60 * 60
+SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 
 
 def _data_dir() -> Path:
     data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
     return data_home / "moviebox"
+
+
+def _version_key(version: str) -> tuple[int, int, int] | None:
+    match = SEMVER_RE.fullmatch(version)
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def _latest_release(force: bool = False) -> str | None:
+    cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    cache_path = cache_home / "moviebox" / "latest-release.json"
+    now = time.time()
+
+    if not force:
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if now - cached.get("checked_at", 0) < RELEASE_CACHE_TTL:
+                return cached.get("tag")
+        except (OSError, ValueError, TypeError):
+            pass
+
+    request = urllib.request.Request(
+        RELEASE_API,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "MovieBox-CLI",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=2.5) as response:
+            data = json.loads(response.read())
+        tag = data.get("tag_name")
+        if not isinstance(tag, str) or _version_key(tag) is None:
+            return None
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps({"tag": tag, "checked_at": now}), encoding="utf-8"
+        )
+        return tag
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+
+
+def _show_update_notice() -> None:
+    latest = _latest_release()
+    current_key = _version_key(API_VERSION)
+    latest_key = _version_key(latest) if latest else None
+    if current_key and latest_key and latest_key > current_key:
+        print(
+            _paint(
+                f"Update available: {latest} (installed: v{API_VERSION}). Run `moviebox update`.",
+                "38;5;82;1",
+            ),
+            flush=True,
+        )
+
+
+def _update_installation() -> int:
+    latest = _latest_release(force=True)
+    current_key = _version_key(API_VERSION)
+    latest_key = _version_key(latest) if latest else None
+    if not latest_key:
+        print("Could not check GitHub Releases. Try again when online.", file=sys.stderr)
+        return 1
+    if current_key and latest_key <= current_key:
+        print(f"MovieBox is up to date (v{API_VERSION}).")
+        return 0
+
+    installer = APP_DIR / "install.sh"
+    if not installer.is_file():
+        print("Installer is missing from this installation.", file=sys.stderr)
+        return 1
+
+    print(f"Updating MovieBox: v{API_VERSION} → {latest}", flush=True)
+    env = os.environ.copy()
+    env["MOVIEBOX_REF"] = latest
+    env["MOVIEBOX_REF_TYPE"] = "tag"
+    try:
+        result = subprocess.run(["sh", str(installer)], env=env, check=False)
+    except OSError as exc:
+        print(f"Could not start the installer: {exc}", file=sys.stderr)
+        return 1
+    if result.returncode == 0:
+        print("Update installed. Run `moviebox` to start the new version.")
+    return result.returncode
 
 
 def _port_is_available(port: int) -> bool:
@@ -82,7 +174,14 @@ def _open_browser_when_ready(server, url: str, open_browser: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="moviebox",
-        description="Start MovieBox locally and open its web app.",
+        description="Run and update your local MovieBox app.",
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("start", "update", "version"),
+        default="start",
+        help="start the app, install the latest release, or print the version.",
     )
     parser.add_argument(
         "--host",
@@ -101,6 +200,14 @@ def main() -> int:
         help="Start the server without opening a browser.",
     )
     args = parser.parse_args()
+
+    if args.command == "version":
+        print(f"MovieBox v{API_VERSION}")
+        return 0
+    if args.command == "update":
+        return _update_installation()
+
+    _show_update_notice()
 
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")

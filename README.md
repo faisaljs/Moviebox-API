@@ -17,7 +17,7 @@ No scraping. No HTML parsing. No headless browser. It talks the exact same priva
 
 Built for people who want to wire moviebox into their own apps, scripts, bots, dashboards, or media servers without reverse-engineering the network tab every time the site ships an update.
 
-**Version 2.8.0** — local CLI installer and launcher, alongside provider failover, FTS5 search, trailer playback, and continue-watching.
+**Version 2.9.0** — local CLI with GitHub Release update checks and one-command updates, alongside provider failover, FTS5 search, and the self-hosted frontend.
 
 ---
 
@@ -97,7 +97,17 @@ The app reads `.env` from the current directory, then
 `MOVIEBOX_ENV_FILE` to choose a specific file. Variables already exported in
 the shell take precedence over values from the file.
 
-To update an existing installation, rerun the installer from `main`:
+At startup, the CLI checks GitHub Releases at most once every 24 hours and
+prints a notice when a newer version is available. Install that release with
+`moviebox update`; check the installed version with `moviebox version`.
+
+Update an existing installation from the latest GitHub Release with:
+
+```bash
+moviebox update
+```
+
+To repair or reinstall from the current `main` branch, rerun the installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/faisaljs/Moviebox-API/main/install.sh | sh
@@ -349,7 +359,7 @@ Live provider state:
 ```json
 {
   "status": "ok",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "default_host": "moviebox.ph",
   "providers": {
     "moviebox.ph": {
@@ -602,6 +612,8 @@ Upstream `/subject/search` is relevance-ranked, not exhaustive. `Matrix` isn't i
 ---
 
 ## Changelog
+
+**v2.9.0** — check for new GitHub Releases, notify at startup, install updates with `moviebox update`, and publish releases automatically from version tags.
 
 **v2.8.0** — per-user `moviebox` CLI installer, local-only server startup, browser launch, cleaner terminal output, and automatic `.env` loading.
 

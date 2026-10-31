@@ -9,7 +9,7 @@ from env_loader import load_environment
 
 load_environment()
 
-API_VERSION = "2.8.0"
+API_VERSION = "2.9.0"
 
 PORT = int(os.environ.get("PORT", "8000"))
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "25"))
