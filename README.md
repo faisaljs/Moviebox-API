@@ -86,64 +86,64 @@ The first boot kicks off the catalog walk in the background. It takes 2–3 minu
 
 ### Discovery & home
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/home` | Featured sections and banners |
-| `GET` | `/home/all` | Flattened deduped feed |
-| `GET` | `/sections` | List every home section |
-| `GET` | `/browse/{section}` | Direct access to any home section |
+| Method | Path                | Purpose                           |
+| ------ | ------------------- | --------------------------------- |
+| `GET`  | `/home`             | Featured sections and banners     |
+| `GET`  | `/home/all`         | Flattened deduped feed            |
+| `GET`  | `/sections`         | List every home section           |
+| `GET`  | `/browse/{section}` | Direct access to any home section |
 
 ### Catalog (indexed)
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/catalog` | Indexed catalog with sort/filter/search |
-| `GET` | `/catalog/stats` | Counts, walk progress, keyword telemetry |
+| Method | Path               | Purpose                                              |
+| ------ | ------------------ | ---------------------------------------------------- |
+| `GET`  | `/catalog`         | Indexed catalog with sort/filter/search              |
+| `GET`  | `/catalog/stats`   | Counts, walk progress, keyword telemetry             |
 | `POST` | `/catalog/refresh` | Re-run the walk (`?mode=enrich` for enrichment only) |
-| `POST` | `/catalog/add` | Manually add a subject by slug |
+| `POST` | `/catalog/add`     | Manually add a subject by slug                       |
 
 ### Home-fallback catalogs
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/movies` | Movies from home sections |
-| `GET` | `/tv-series` | TV series from home sections |
-| `GET` | `/animation` | Animation from home sections |
+| Method | Path         | Purpose                      |
+| ------ | ------------ | ---------------------------- |
+| `GET`  | `/movies`    | Movies from home sections    |
+| `GET`  | `/tv-series` | TV series from home sections |
+| `GET`  | `/animation` | Animation from home sections |
 
 ### Search & metadata
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/search` | Full-text search against upstream |
-| `GET` | `/search/suggest` | Typeahead (`?enrich=true` for slugs) |
-| `GET` | `/detail/{slug}` | Full metadata for a subject |
+| Method | Path              | Purpose                              |
+| ------ | ----------------- | ------------------------------------ |
+| `GET`  | `/search`         | Full-text search against upstream    |
+| `GET`  | `/search/suggest` | Typeahead (`?enrich=true` for slugs) |
+| `GET`  | `/detail/{slug}`  | Full metadata for a subject          |
 
 ### Stream & subtitles
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/stream/{subject_id}` | Direct video sources |
-| `GET` | `/api/stream/{subject_id}/proxy` | Range-aware MP4 passthrough |
-| `GET` | `/api/stream/{subject_id}/captions` | Subtitle list |
-| `GET` | `/api/stream/{subject_id}/subtitles/{lang}` | SRT → VTT inline |
+| Method | Path                                        | Purpose                     |
+| ------ | ------------------------------------------- | --------------------------- |
+| `GET`  | `/api/stream/{subject_id}`                  | Direct video sources        |
+| `GET`  | `/api/stream/{subject_id}/proxy`            | Range-aware MP4 passthrough |
+| `GET`  | `/api/stream/{subject_id}/captions`         | Subtitle list               |
+| `GET`  | `/api/stream/{subject_id}/subtitles/{lang}` | SRT → VTT inline            |
 
 ### Providers
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/providers` | Live provider health with circuit breaker state |
-| `POST` | `/providers/probe` | Force-probe all providers now |
-| `POST` | `/providers/reset` | Clear all circuit breakers |
-| `GET` | `/api/hosts` | Backwards-compat host status |
+| Method | Path               | Purpose                                         |
+| ------ | ------------------ | ----------------------------------------------- |
+| `GET`  | `/providers`       | Live provider health with circuit breaker state |
+| `POST` | `/providers/probe` | Force-probe all providers now                   |
+| `POST` | `/providers/reset` | Clear all circuit breakers                      |
+| `GET`  | `/api/hosts`       | Backwards-compat host status                    |
 
 ### Diagnostics
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/health` | Liveness, cache state, catalog counts |
-| `GET` | `/api/tabs` | Probe tab IDs (diagnostic) |
-| `GET` | `/api/tabs/variants` | Try every known filter payload shape |
-| `GET` | `/api/debug/upstream` | Raw upstream passthrough |
+| Method | Path                  | Purpose                               |
+| ------ | --------------------- | ------------------------------------- |
+| `GET`  | `/health`             | Liveness, cache state, catalog counts |
+| `GET`  | `/api/tabs`           | Probe tab IDs (diagnostic)            |
+| `GET`  | `/api/tabs/variants`  | Try every known filter payload shape  |
+| `GET`  | `/api/debug/upstream` | Raw upstream passthrough              |
 
 ---
 
@@ -183,14 +183,14 @@ The real catalog. Reads from the SQLite index populated by the background walk.
 
 **Query parameters**
 
-| Param | Type | Default | Notes |
-|-------|------|---------|-------|
-| `type` | string | `all` | `all`, `movie`, `tv`, `anime` |
-| `sort` | string | `recent` | `recent`, `title`, `rating` |
-| `page` | int | `1` | 1-indexed |
-| `per_page` | int | `24` | Max 100 |
-| `q` | string | — | FTS5 title search (with LIKE fallback) |
-| `host` | string | — | Filter by source host |
+| Param      | Type   | Default  | Notes                                  |
+| ---------- | ------ | -------- | -------------------------------------- |
+| `type`     | string | `all`    | `all`, `movie`, `tv`, `anime`          |
+| `sort`     | string | `recent` | `recent`, `title`, `rating`            |
+| `page`     | int    | `1`      | 1-indexed                              |
+| `per_page` | int    | `24`     | Max 100                                |
+| `q`        | string | —        | FTS5 title search (with LIKE fallback) |
+| `host`     | string | —        | Filter by source host                  |
 
 ```bash
 curl "http://localhost:8000/catalog?type=movie&sort=rating&per_page=5" | jq
@@ -201,6 +201,7 @@ curl "http://localhost:8000/catalog?q=love%20you" | jq   # multi-word AND
 Response includes `total`, `total_pages`, and `items[]` with `name`, `poster_url`, `slug`, `subject_id`, `rating`, `year`, `badge`, `subject_type`, `genre`, `types[]`.
 
 **FTS5 search behavior:**
+
 - Multi-word queries AND'd (`love you` finds titles with both)
 - Prefix matching (`matri` matches `matrix`)
 - Rank-ordered (best match first)
@@ -323,7 +324,14 @@ Live provider state:
   "status": "ok",
   "version": "2.7.0",
   "default_host": "moviebox.ph",
-  "providers": { "moviebox.ph": { "alive": true, "latency_ms": 374, "fails": 0, "circuit_open": false } },
+  "providers": {
+    "moviebox.ph": {
+      "alive": true,
+      "latency_ms": 374,
+      "fails": 0,
+      "circuit_open": false
+    }
+  },
   "tokens_cached": 1,
   "domain_cached": "https://mzfi.me",
   "domain_expires_in": 287,
@@ -363,14 +371,14 @@ deployment if multiple people need independent libraries.
 
 **Player keyboard shortcuts:**
 
-| Key | Action |
-|-----|--------|
-| `Space` / `k` | Play / pause |
-| `←` / `→` | Seek ±5s |
-| `↑` / `↓` | Volume ±10% |
-| `f` | Fullscreen |
-| `m` | Mute |
-| `Esc` | Close player / exit fullscreen |
+| Key           | Action                         |
+| ------------- | ------------------------------ |
+| `Space` / `k` | Play / pause                   |
+| `←` / `→`     | Seek ±5s                       |
+| `↑` / `↓`     | Volume ±10%                    |
+| `f`           | Fullscreen                     |
+| `m`           | Mute                           |
+| `Esc`         | Close player / exit fullscreen |
 
 ---
 
@@ -497,20 +505,20 @@ Exits non-zero on any failure. Drops straight into CI or a pre-commit hook.
 
 See `.env.example` for the full list with defaults. Key variables:
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `PORT` | `8000` | Listen port |
-| `RELOAD` | `0` | `1` enables autoreload (dev) |
-| `REQUEST_TIMEOUT` | `25` | Upstream timeout, seconds |
-| `CATALOG_DB` | `catalog.db` | SQLite path |
-| `CATALOG_REFRESH_INTERVAL` | `21600` | Walk re-run interval (6h) |
-| `CATALOG_MAX_PAGES_PER_KEYWORD` | `50` | Bump to 200 for deeper keyword coverage |
-| `ENRICH_RATE_LIMIT` | `0.2` | Seconds between `/detail` calls during enrichment |
-| `MOVIEBOX_HOST` | `moviebox.ph` | Primary provider |
-| `MOVIEBOX_HOSTS` | 7 mirrors | Comma-separated |
-| `PROVIDER_PROBE_INTERVAL` | `60` | Seconds between probe ticks |
-| `CIRCUIT_BREAKER_THRESHOLD` | `3` | Failures before host opens |
-| `CIRCUIT_BREAKER_SECONDS` | `60` | How long host stays open |
+| Variable                        | Default       | Notes                                             |
+| ------------------------------- | ------------- | ------------------------------------------------- |
+| `PORT`                          | `8000`        | Listen port                                       |
+| `RELOAD`                        | `0`           | `1` enables autoreload (dev)                      |
+| `REQUEST_TIMEOUT`               | `25`          | Upstream timeout, seconds                         |
+| `CATALOG_DB`                    | `catalog.db`  | SQLite path                                       |
+| `CATALOG_REFRESH_INTERVAL`      | `21600`       | Walk re-run interval (6h)                         |
+| `CATALOG_MAX_PAGES_PER_KEYWORD` | `50`          | Bump to 200 for deeper keyword coverage           |
+| `ENRICH_RATE_LIMIT`             | `0.2`         | Seconds between `/detail` calls during enrichment |
+| `MOVIEBOX_HOST`                 | `moviebox.ph` | Primary provider                                  |
+| `MOVIEBOX_HOSTS`                | 7 mirrors     | Comma-separated                                   |
+| `PROVIDER_PROBE_INTERVAL`       | `60`          | Seconds between probe ticks                       |
+| `CIRCUIT_BREAKER_THRESHOLD`     | `3`           | Failures before host opens                        |
+| `CIRCUIT_BREAKER_SECONDS`       | `60`          | How long host stays open                          |
 
 No config file. `set -a && source .env && set +a && python main.py` or `docker compose up`.
 

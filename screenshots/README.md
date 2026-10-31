@@ -107,3 +107,4 @@ Suggested tool for consistent captures:
 ```bash
 # Firefox devtools "Take screenshot" — full page, 1440×900 viewport
 # or: firefox --screenshot=home.png --window-size=1440,900 http://localhost:8000/app
+```

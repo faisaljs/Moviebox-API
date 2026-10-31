@@ -2,7 +2,7 @@
 
 **Maintainer:** [Faisal (@faisaljs)](https://github.com/faisaljs) · [Repo](https://github.com/faisaljs/Moviebox-API) · [Issues](https://github.com/faisaljs/Moviebox-API/issues)
 
-Short version: fork, branch, make it work, run `verify.py`, open a PR. Keep it small. Explain *why* in the PR body, not *what* — the diff shows what.
+Short version: fork, branch, make it work, run `verify.py`, open a PR. Keep it small. Explain _why_ in the PR body, not _what_ — the diff shows what.
 
 ## Setup
 
@@ -29,9 +29,11 @@ The first boot kicks off the catalog walk. ~3 minutes to populate the DB, then e
 ## Before you open a PR
 
 1. **Run the verifier.** With the server live:
+
    ```bash
    python verify.py
    ```
+
    Every check must print `[PASS]`. If one fails, either your change broke it or upstream drifted — figure out which before opening the PR.
 
 2. **Touch the smallest surface possible.** One concern per PR. Don't bundle a refactor with a feature.
@@ -122,6 +124,7 @@ The token flow (`x-user` header → per-host cache), the player-domain flow (`/m
 There's no unit test suite. The API surface is a thin proxy — unit tests would just re-assert dict shapes and rot the moment upstream shifts. `verify.py` is the integration test.
 
 If you want to add automated tests, they need to be:
+
 - Against a recorded upstream fixture (VCR-style), not live
 - Run in CI without network access
 - Small — cover `_get_category_data` parsing, `/home` section extraction, `srt_to_vtt`, and `pick_mp4_stream` logic, not the whole request path
@@ -142,6 +145,7 @@ No `feat(scope):`, no emoji, no `[JIRA-123]` prefixes.
 ## Pull requests
 
 PR body should answer:
+
 - What changed
 - Why (link to upstream behavior, an issue, or a repro)
 - How you verified it
@@ -151,6 +155,7 @@ If `verify.py` output changed, paste it. If it's a behavioral change, describe t
 ## Reporting upstream breakage
 
 If a route stops working and you're not fixing it yourself: open an issue with
+
 - The route
 - The status code / error body you get
 - The equivalent request in the browser DevTools that still works

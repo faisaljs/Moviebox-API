@@ -17,7 +17,13 @@ services:
       CATALOG_DB: /app/data/catalog.db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=3).status_code==200 else 1)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=3).status_code==200 else 1)",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
