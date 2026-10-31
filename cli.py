@@ -108,7 +108,10 @@ def main() -> int:
         ).start()
 
     print("Starting MovieBox. Press Ctrl+C to stop.", flush=True)
-    server.run()
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        print("MovieBox stopped.", flush=True)
     return 0
 
 
