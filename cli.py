@@ -18,8 +18,8 @@ import webbrowser
 from pathlib import Path
 
 from env_loader import load_environment
-from config import API_VERSION
 
+_EXPORTED_CATALOG_DB = os.environ.get("CATALOG_DB")
 load_environment()
 
 
@@ -75,6 +75,8 @@ def _latest_release(force: bool = False) -> str | None:
 
 
 def _show_update_notice() -> None:
+    from config import API_VERSION
+
     latest = _latest_release()
     current_key = _version_key(API_VERSION)
     latest_key = _version_key(latest) if latest else None
@@ -89,6 +91,8 @@ def _show_update_notice() -> None:
 
 
 def _update_installation() -> int:
+    from config import API_VERSION
+
     latest = _latest_release(force=True)
     current_key = _version_key(API_VERSION)
     latest_key = _version_key(latest) if latest else None
@@ -202,12 +206,12 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "version":
+        from config import API_VERSION
+
         print(f"MovieBox v{API_VERSION}")
         return 0
     if args.command == "update":
         return _update_installation()
-
-    _show_update_notice()
 
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
@@ -229,7 +233,10 @@ def main() -> int:
 
     data_dir = _data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("CATALOG_DB", str(data_dir / "catalog.db"))
+    configured_db = os.environ.get("CATALOG_DB")
+    if _EXPORTED_CATALOG_DB is None and configured_db in (None, "", "catalog.db"):
+        os.environ["CATALOG_DB"] = str(data_dir / "catalog.db")
+    _show_update_notice()
     sys.path.insert(0, str(APP_DIR))
 
     try:

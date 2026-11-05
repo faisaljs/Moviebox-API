@@ -1,5 +1,5 @@
 """
-Live verification for MovieBox API Pro v2.9.0.
+Live verification for MovieBox API Pro v2.9.1.
 
 Author: Faisal (https://github.com/faisaljs)
 Repo:   https://github.com/faisaljs/Moviebox-API

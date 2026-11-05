@@ -78,8 +78,9 @@ keyboard shortcuts for space/arrows/f/m/esc. Subtitles render from
 ## Bookmarks
 
 Every poster has a heart button that appears on hover. Clicking saves the
-title to `localStorage` under `mb_bookmarks`. The Bookmarks page lists
-everything saved, sorted by save time, with a Clear all button.
+title to the server's SQLite `user_bookmarks` table through the API. The
+Bookmarks page lists everything saved, sorted by save time, with a Clear all
+button.
 
 ![Bookmarks](bookmark.png)
 
@@ -87,10 +88,10 @@ everything saved, sorted by save time, with a Clear all button.
 
 ## Watch History
 
-Every play session saves progress to `localStorage` under `mb_history`. The
-History page lists every entry with a progress bar, "Resume at M:SS" button,
-and season/episode badge. Resume opens the player directly at the saved
-timestamp.
+Every play session saves progress to the server's SQLite `user_history` table
+through the API. The History page lists every entry with a progress bar,
+"Resume at M:SS" button, and season/episode badge. Resume opens the player
+directly at the saved timestamp.
 
 ![Watch history](history.png)
 

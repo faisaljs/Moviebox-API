@@ -221,7 +221,6 @@ async def run_enrichment():
             SELECT subject_id, slug, source_host FROM subjects
             WHERE subject_type IS NULL
               AND slug IS NOT NULL
-              AND is_movie = 0 AND is_tv = 0 AND is_anime = 0
             ORDER BY first_seen
         """)
         for start in range(0, len(rows), ENRICH_BATCH_SIZE):

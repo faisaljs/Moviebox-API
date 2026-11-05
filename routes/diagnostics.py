@@ -6,7 +6,7 @@ License: MIT
 
 import json
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import state
 import storage
 import providers
@@ -20,7 +20,15 @@ router = APIRouter()
 
 
 @router.get("/api/tabs")
-async def discover_tabs(min_id: int = 1, max_id: int = 20, per_page: int = 3):
+async def discover_tabs(
+    min_id: int = Query(default=1, ge=1),
+    max_id: int = Query(default=20, ge=1),
+    per_page: int = Query(default=3, ge=1, le=20),
+):
+    if max_id < min_id:
+        raise HTTPException(400, detail="max_id must be greater than or equal to min_id")
+    if max_id - min_id + 1 > 50:
+        raise HTTPException(400, detail="A maximum of 50 tab IDs can be probed per request")
     results = []
     for tab_id in range(min_id, max_id + 1):
         payload = {"tabId": tab_id, "page": 1, "perPage": per_page,

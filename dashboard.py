@@ -44,7 +44,7 @@ footer{text-align:center;padding:80px 0 40px;animation:fadeIn 2s ease}
 <body>
 <div class="container">
 <header>
-<div class="badge">v2.9.0 &middot; Release Updates</div>
+<div class="badge">v2.9.1 &middot; Release Updates</div>
 <h1>MovieBox Pro</h1>
 <p style="color:#667;font-size:1.25rem;font-weight:300">State-of-the-Art Pure API Architecture</p>
 </header>

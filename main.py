@@ -9,8 +9,8 @@ import sqlite3
 import asyncio
 from contextlib import asynccontextmanager
 import httpx
-from fastapi import FastAPI, HTTPException, Response
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -19,7 +19,7 @@ import storage
 import providers
 import catalog_worker
 from config import (
-    API_VERSION, PORT, REQUEST_TIMEOUT, CATALOG_DB, STATIC_DIR,
+    API_VERSION, PORT, BIND_HOST, CORS_ORIGINS, REQUEST_TIMEOUT, CATALOG_DB, STATIC_DIR,
 )
 from dashboard import DASHBOARD_HTML
 from routes import router
@@ -90,12 +90,34 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.middleware("http")
+async def reject_cross_origin_mutations(request: Request, call_next):
+    # The app has no login cookie to provide CSRF protection. Reject browser
+    # form/fetch mutations from untrusted origins while allowing native clients
+    # that do not send Origin and explicitly configured web clients.
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin")
+        if origin:
+            scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+            same_origin = f"{scheme}://{request.headers.get('host', request.url.netloc)}"
+            if origin.rstrip("/") not in {same_origin.rstrip("/"), *CORS_ORIGINS}:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Cross-origin mutations are not allowed"},
+                )
+    return await call_next(request)
+
+
+if CORS_ORIGINS:
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
 app.include_router(router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -143,4 +165,4 @@ async def frontend_app():
 if __name__ == "__main__":
     import uvicorn
     reload_flag = os.environ.get("RELOAD", "0") == "1"
-    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=reload_flag)
+    uvicorn.run("main:app", host=BIND_HOST, port=PORT, reload=reload_flag)

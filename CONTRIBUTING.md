@@ -71,7 +71,7 @@ The first boot kicks off the catalog walk. ~3 minutes to populate the DB, then e
 
 ## Module layout
 
-Ten files. Understand this before touching anything:
+Understand these core modules before changing shared behavior:
 
 ```
 config.py            env vars, headers, constants — no imports from local modules
@@ -82,7 +82,7 @@ storage.py           sqlite schema, FTS5, read, upsert
 helpers.py           normalize, srt_to_vtt, pick_mp4_stream
 catalog_worker.py    walk, enrichment, maintenance loop
 dashboard.py         DASHBOARD_HTML string
-routes.py            all API endpoints
+routes/              API endpoints grouped by feature
 main.py              FastAPI app + lifespan + static routes
 ```
 

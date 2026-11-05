@@ -53,10 +53,12 @@ async def get_stream_sources(subject_id: str, detail_path: str, se: int = 1, ep:
 
 @router.get("/api/stream/{subject_id}/captions")
 async def get_captions(subject_id: str, detail_path: str, se: int = 1, ep: int = 1):
+    stream = await upstream.resolve_stream(subject_id, detail_path, se, ep)
     captions = await upstream.resolve_captions(subject_id, detail_path, se, ep)
     return {
         "subject_id": subject_id,
-        "se": se, "ep": ep,
+        "se": stream.get("resolved_se", se),
+        "ep": stream.get("resolved_ep", ep),
         "count": len(captions),
         "captions": captions,
     }

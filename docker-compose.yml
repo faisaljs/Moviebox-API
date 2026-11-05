@@ -8,13 +8,14 @@ services:
       org.opencontainers.image.source: "https://github.com/faisaljs/Moviebox-API"
       org.opencontainers.image.licenses: "MIT"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     volumes:
       - ./data:/app/data
     environment:
       CATALOG_DB: /app/data/catalog.db
+      MOVIEBOX_BIND_HOST: 0.0.0.0
     restart: unless-stopped
     healthcheck:
       test:

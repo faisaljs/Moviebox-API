@@ -17,7 +17,7 @@ No scraping. No HTML parsing. No headless browser. It talks the exact same priva
 
 Built for people who want to wire moviebox into their own apps, scripts, bots, dashboards, or media servers without reverse-engineering the network tab every time the site ships an update.
 
-**Version 2.9.0** — local CLI with GitHub Release update checks and one-command updates, alongside provider failover, FTS5 search, and the self-hosted frontend.
+**Version 2.9.1** — fixes for CLI database placement, catalog enrichment, provider diagnostics bounds, safer local network defaults, and Docker packaging.
 
 ---
 
@@ -73,8 +73,12 @@ PORT=9000 python main.py
 Docker:
 
 ```bash
+cp .env.example .env
 docker compose up -d
 ```
+
+The Compose file loads settings from `.env`; create it from `.env.example` on
+a fresh checkout before starting the container.
 
 ### Install the local CLI
 
@@ -359,7 +363,7 @@ Live provider state:
 ```json
 {
   "status": "ok",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "default_host": "moviebox.ph",
   "providers": {
     "moviebox.ph": {
@@ -442,7 +446,7 @@ storage.py           sqlite schema, FTS5, read, upsert, classify
 helpers.py           normalize, srt_to_vtt, pick_mp4_stream
 catalog_worker.py    walk, enrichment, maintenance loop
 dashboard.py         DASHBOARD_HTML string
-routes.py            all API endpoints
+routes/              APIRouter handlers grouped by feature
 main.py              FastAPI app + lifespan + middleware + / and /app
 static/app.html      frontend
 ```
@@ -507,7 +511,14 @@ On boot, right after `init_schema`, the lifespan runs `PRAGMA integrity_check`. 
 ├── helpers.py
 ├── catalog_worker.py
 ├── dashboard.py
-├── routes.py
+├── routes/
+│   ├── user.py
+│   ├── providers.py
+│   ├── home.py
+│   ├── catalog.py
+│   ├── search.py
+│   ├── stream.py
+│   └── diagnostics.py
 ├── static/
 │   └── app.html
 ├── requirements.txt
@@ -547,8 +558,9 @@ See `.env.example` for the full list with defaults. Key variables:
 | `PORT`                          | `8000`        | Listen port                                       |
 | `RELOAD`                        | `0`           | `1` enables autoreload (dev)                      |
 | `REQUEST_TIMEOUT`               | `25`          | Upstream timeout, seconds                         |
-| `MOVIEBOX_BIND_HOST`            | `127.0.0.1`   | Bind address for the `moviebox` CLI               |
-| `CATALOG_DB`                    | `catalog.db`  | SQLite path                                       |
+| `MOVIEBOX_BIND_HOST`            | `127.0.0.1`   | Bind address; Docker sets this to `0.0.0.0` inside its container |
+| `CORS_ORIGINS`                  | empty         | Optional comma-separated trusted origins allowed for browser cross-origin API calls |
+| `CATALOG_DB`                    | `catalog.db`  | SQLite path; the CLI stores this default under its per-user data directory |
 | `CATALOG_REFRESH_INTERVAL`      | `21600`       | Walk re-run interval (6h)                         |
 | `CATALOG_MAX_PAGES_PER_KEYWORD` | `50`          | Bump to 200 for deeper keyword coverage           |
 | `ENRICH_RATE_LIMIT`             | `0.2`         | Seconds between `/detail` calls during enrichment |
@@ -566,6 +578,8 @@ passes `.env` into the container.
 
 ## Deployment notes
 
+- **Network exposure** — direct runs bind to localhost, and Docker Compose publishes on localhost. To expose a deployment, deliberately change the bind/port settings and put authentication in front of it; this app has no user authentication.
+- **CORS** — same-origin frontend use needs no CORS setting. Set `CORS_ORIGINS` only for specific trusted web clients.
 - **Behind a reverse proxy** — forward the full path. Routes assume `/` as root.
 - **Healthcheck** — point your orchestrator at `/health`.
 - **Persist `catalog.db`** — mount it as a volume or the walk restarts on every container rebuild. The compose file already bind-mounts it.
@@ -612,6 +626,8 @@ Upstream `/subject/search` is relevance-ranked, not exhaustive. `Matrix` isn't i
 ---
 
 ## Changelog
+
+**v2.9.1** — fix CLI catalog path selection, enrich home-ingested catalog entries, bound tab diagnostics, restrict cross-origin access and default network exposure, and include route modules in Docker images.
 
 **v2.9.0** — check for new GitHub Releases, notify at startup, install updates with `moviebox update`, and publish releases automatically from version tags.
 
