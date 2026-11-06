@@ -165,4 +165,4 @@ That's usually enough to diff and fix in one pass.
 
 ## One last thing
 
-Non-loopback binds require `MOVIEBOX_AUTH_USER` and `MOVIEBOX_AUTH_PASSWORD`. Put the service behind an HTTPS reverse proxy so Basic Auth credentials are encrypted in transit. Authentication is instance-wide: it does not create separate user libraries. Keep the default loopback bind for personal local use.
+If you're going to run this on a public URL — even briefly — put `auth_basic` in front of it from day one. Not for security (it's a personal tool), for cover. A public streaming proxy on your own domain on AWS Lightsail is one DMCA notice from losing both the instance and the account. Personal use, `http://localhost:8000/app`, is fine. That's the whole threat model.

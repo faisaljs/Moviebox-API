@@ -11,24 +11,21 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
+    volumes:
+      - ./data:/app/data
     environment:
       CATALOG_DB: /app/data/catalog.db
       MOVIEBOX_BIND_HOST: 0.0.0.0
-      MOVIEBOX_AUTH_USER: ${MOVIEBOX_AUTH_USER:?Set MOVIEBOX_AUTH_USER in .env}
-      MOVIEBOX_AUTH_PASSWORD: ${MOVIEBOX_AUTH_PASSWORD:?Set MOVIEBOX_AUTH_PASSWORD in .env}
-    volumes:
-      - moviebox_data:/app/data
-    read_only: true
-    tmpfs:
-      - /tmp:size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 512m
-    cpus: 1.0
     restart: unless-stopped
-
-volumes:
-  moviebox_data:
-    name: moviebox-data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=3).status_code==200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

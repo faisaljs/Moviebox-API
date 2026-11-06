@@ -44,7 +44,7 @@ footer{text-align:center;padding:80px 0 40px;animation:fadeIn 2s ease}
 <body>
 <div class="container">
 <header>
-<div class="badge">v2.10.0 &middot; Production hardening</div>
+<div class="badge">v2.9.1 &middot; Release Updates</div>
 <h1>MovieBox Pro</h1>
 <p style="color:#667;font-size:1.25rem;font-weight:300">State-of-the-Art Pure API Architecture</p>
 </header>
@@ -64,7 +64,7 @@ footer{text-align:center;padding:80px 0 40px;animation:fadeIn 2s ease}
 <div class="card"><div class="card-title"><i>🎥</i> Stream</div><p class="card-desc">MP4 sources + manifests.</p><div class="endpoint">/api/stream/{sid}</div><a href="/api/stream/56988683026712168?detail_path=attack-on-titan-hindi-kGWQOIx0d4" target="_blank" class="btn">Get</a></div>
 <div class="card"><div class="card-title"><i>📥</i> Proxy</div><p class="card-desc">Range-aware MP4 passthrough.</p><div class="endpoint">/api/stream/{sid}/proxy</div><a href="/api/stream/56988683026712168/proxy?detail_path=attack-on-titan-hindi-kGWQOIx0d4&res=best" target="_blank" class="btn">Stream</a></div>
 <div class="card"><div class="card-title"><i>📄</i> VTT</div><p class="card-desc">SRT → WebVTT inline.</p><div class="endpoint">/api/stream/{sid}/subtitles/{lang}</div><a href="/api/stream/6207982430134357800/subtitles/en?detail_path=breaking-bad-ej6Bp0MCAo7" target="_blank" class="btn">Get</a></div>
-<div class="card"><div class="card-title"><i>❤️</i> Health</div><p class="card-desc">Liveness, readiness, and detailed runtime diagnostics.</p><div class="endpoint">/health/details</div><a href="/health/details" target="_blank" class="btn">Check</a></div>
+<div class="card"><div class="card-title"><i>❤️</i> Health</div><p class="card-desc">Liveness + per-provider state.</p><div class="endpoint">/health</div><a href="/health" target="_blank" class="btn">Check</a></div>
 </div>
 <footer>
 <a href="https://github.com/faisaljs" target="_blank" class="dev-tag">Developer: Faisal</a>

@@ -17,7 +17,7 @@ No scraping. No HTML parsing. No headless browser. It talks the exact same priva
 
 Built for people who want to wire moviebox into their own apps, scripts, bots, dashboards, or media servers without reverse-engineering the network tab every time the site ships an update.
 
-**Version 2.10.0** — adds mandatory authentication for non-local binds, request throttling, security headers, readiness checks, and a hardened Docker runtime.
+**Version 2.9.1** — fixes for CLI database placement, catalog enrichment, provider diagnostics bounds, safer local network defaults, and Docker packaging.
 
 ---
 
@@ -74,23 +74,11 @@ Docker:
 
 ```bash
 cp .env.example .env
-# Set a unique username and a password of at least 16 characters in .env.
 docker compose up -d
 ```
 
-The Compose file loads settings from `.env`; create it from `.env.example` and
-set unique authentication credentials before starting the container. Docker
-uses a persistent named volume for the catalog.
-
-When upgrading from the earlier Compose setup, copy the old `./data` contents
-into the new volume before starting the container:
-
-```bash
-docker compose down
-docker volume create moviebox-data
-docker run --rm -v "$PWD/data:/source:ro" -v moviebox-data:/target alpine \
-  sh -c 'cp -a /source/. /target/'
-```
+The Compose file loads settings from `.env`; create it from `.env.example` on
+a fresh checkout before starting the container.
 
 ### Install the local CLI
 
@@ -193,9 +181,7 @@ The first boot kicks off the catalog walk in the background. It takes 2–3 minu
 
 | Method | Path                  | Purpose                               |
 | ------ | --------------------- | ------------------------------------- |
-| `GET`  | `/health`             | Minimal unauthenticated liveness check |
-| `GET`  | `/health/ready`       | Dependency readiness (authenticated) |
-| `GET`  | `/health/details`     | Detailed runtime diagnostics (authenticated) |
+| `GET`  | `/health`             | Liveness, cache state, catalog counts |
 | `GET`  | `/api/tabs`           | Probe tab IDs (diagnostic)            |
 | `GET`  | `/api/tabs/variants`  | Try every known filter payload shape  |
 | `GET`  | `/api/debug/upstream` | Raw upstream passthrough              |
@@ -374,21 +360,10 @@ Live provider state:
 
 ### `GET /health`
 
-Unauthenticated and intentionally minimal for container liveness probes.
-Returns `{"status":"ok","version":"2.10.0"}`.
-
-### `GET /health/ready`
-
-Authenticated check of the database and HTTP client, suitable for readiness probes.
-
-### `GET /health/details`
-
-Authenticated runtime diagnostics including provider and cache state.
-
 ```json
 {
   "status": "ok",
-  "version": "2.10.0",
+  "version": "2.9.1",
   "default_host": "moviebox.ph",
   "providers": {
     "moviebox.ph": {
@@ -603,15 +578,13 @@ passes `.env` into the container.
 
 ## Deployment notes
 
-- **Network exposure** — direct runs bind to localhost. Any non-loopback bind requires `MOVIEBOX_AUTH_USER` and a password of at least 16 characters; the app challenges requests with HTTP Basic authentication. Put it behind an HTTPS reverse proxy because Basic credentials must not cross an unencrypted network.
-- **Shared user data** — authentication gates bookmarks and history, but all clients on one instance still share the same library.
-- **Rate limiting** — the built-in limiter is per client address and process. Multiple instances need shared limiting at the gateway or reverse proxy.
+- **Network exposure** — direct runs bind to localhost, and Docker Compose publishes on localhost. To expose a deployment, deliberately change the bind/port settings and put authentication in front of it; this app has no user authentication.
 - **CORS** — same-origin frontend use needs no CORS setting. Set `CORS_ORIGINS` only for specific trusted web clients.
 - **Behind a reverse proxy** — forward the full path. Routes assume `/` as root.
-- **Healthcheck** — use `/health` for liveness and authenticated `/health/ready` for readiness.
-- **Persist `catalog.db`** — the Compose deployment uses a named volume; preserve that volume across container replacements.
+- **Healthcheck** — point your orchestrator at `/health`.
+- **Persist `catalog.db`** — mount it as a volume or the walk restarts on every container rebuild. The compose file already bind-mounts it.
 - **Rate limits** — upstream is unauthenticated for guests. Heavy polling will get throttled.
-- **Authentication** — non-loopback binds require application Basic Auth. A reverse proxy may add another access-control layer; terminate TLS there.
+- **Basic auth** — if exposing beyond localhost, put `auth_basic` in the nginx config from day one. See `CONTRIBUTING.md` for the threat model.
 - **ToS** — you're calling a third party's private API. Behave accordingly.
 
 ---
@@ -653,8 +626,6 @@ Upstream `/subject/search` is relevance-ranked, not exhaustive. `Matrix` isn't i
 ---
 
 ## Changelog
-
-**v2.10.0** — require Basic authentication on non-local binds, add request limits and security headers, split liveness/readiness/diagnostic health routes, and run Docker as a non-root user with a hardened filesystem and persistent volume.
 
 **v2.9.1** — fix CLI catalog path selection, enrich home-ingested catalog entries, bound tab diagnostics, restrict cross-origin access and default network exposure, and include route modules in Docker images.
 

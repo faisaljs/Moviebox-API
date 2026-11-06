@@ -9,9 +9,6 @@ LABEL org.opencontainers.image.url="https://github.com/faisaljs/Moviebox-API"
 
 WORKDIR /app
 
-RUN groupadd --system moviebox && useradd --system --gid moviebox --home-dir /app moviebox \
-    && mkdir -p /app/data && chown moviebox:moviebox /app/data
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -25,11 +22,9 @@ COPY *.py ./
 COPY routes/ ./routes/
 COPY static/ ./static/
 
-USER moviebox
-
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import httpx,os,sys; r=httpx.get('http://localhost:8000/health/ready',auth=(os.environ['MOVIEBOX_AUTH_USER'],os.environ['MOVIEBOX_AUTH_PASSWORD']),timeout=3); sys.exit(0 if r.status_code==200 else 1)"
+    CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health',timeout=3).status_code==200 else 1)"
 
 CMD ["python", "main.py"]

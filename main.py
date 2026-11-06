@@ -7,10 +7,6 @@ License: MIT
 import os
 import sqlite3
 import asyncio
-import base64
-import binascii
-import hmac
-import time
 from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -24,8 +20,6 @@ import providers
 import catalog_worker
 from config import (
     API_VERSION, PORT, BIND_HOST, CORS_ORIGINS, REQUEST_TIMEOUT, CATALOG_DB, STATIC_DIR,
-    AUTH_ENABLED, AUTH_USER, AUTH_PASSWORD, RATE_LIMIT_PER_MINUTE,
-    EXPENSIVE_RATE_LIMIT_PER_MINUTE,
 )
 from dashboard import DASHBOARD_HTML
 from routes import router
@@ -42,12 +36,7 @@ async def lifespan(app: FastAPI):
         ),
         follow_redirects=True,
     )
-    os.makedirs(os.path.dirname(os.path.abspath(CATALOG_DB)), exist_ok=True)
-    state.write_conn = sqlite3.connect(
-        CATALOG_DB, timeout=30.0, check_same_thread=False,
-    )
-    state.write_conn.execute("PRAGMA busy_timeout=30000")
-    state.write_conn.execute("PRAGMA foreign_keys=ON")
+    state.write_conn = sqlite3.connect(CATALOG_DB, check_same_thread=False)
     state.write_conn.execute("PRAGMA journal_mode=WAL")
     state.write_conn.execute("PRAGMA synchronous=NORMAL")
     storage.init_schema()
@@ -101,82 +90,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_rate_windows: dict[tuple[str, str], tuple[int, int]] = {}
-_rate_checks = 0
-_EXPENSIVE_PREFIXES = (
-    "/catalog/refresh", "/catalog/add", "/api/tabs", "/api/debug/",
-    "/providers/probe", "/search", "/detail/", "/api/stream/",
-)
-
-
-def _authorized(header: str | None) -> bool:
-    if not header:
-        return False
-    scheme, separator, encoded = header.partition(" ")
-    if not separator or scheme.lower() != "basic":
-        return False
-    try:
-        raw = base64.b64decode(encoded, validate=True).decode("utf-8")
-        username, separator, password = raw.partition(":")
-    except (binascii.Error, UnicodeDecodeError, ValueError):
-        return False
-    if not separator:
-        return False
-    return hmac.compare_digest(username, AUTH_USER) & hmac.compare_digest(password, AUTH_PASSWORD)
-
-
-@app.middleware("http")
-async def production_guards(request: Request, call_next):
-    global _rate_checks
-    is_liveness = request.method == "GET" and request.url.path == "/health"
-    if AUTH_ENABLED and not is_liveness and not _authorized(request.headers.get("authorization")):
-        response = JSONResponse(
-            status_code=401,
-            content={"detail": "Authentication required"},
-            headers={"WWW-Authenticate": 'Basic realm="MovieBox", charset="UTF-8"'},
-        )
-    else:
-        client_host = request.client.host if request.client else "unknown"
-        expensive = request.url.path.startswith(_EXPENSIVE_PREFIXES)
-        limit = EXPENSIVE_RATE_LIMIT_PER_MINUTE if expensive else RATE_LIMIT_PER_MINUTE
-        window = int(time.time() // 60)
-        key = (client_host, "expensive" if expensive else "general")
-        old_window, count = _rate_windows.get(key, (window, 0))
-        if old_window != window:
-            count = 0
-        if count >= limit:
-            response = JSONResponse(
-                status_code=429,
-                content={"detail": "Request rate limit exceeded"},
-                headers={"Retry-After": str(60 - int(time.time() % 60))},
-            )
-        else:
-            _rate_windows[key] = (window, count + 1)
-            _rate_checks += 1
-            if _rate_checks % 256 == 0:
-                _rate_windows_copy = dict(_rate_windows)
-                _rate_windows.clear()
-                _rate_windows.update({k: v for k, v in _rate_windows_copy.items() if v[0] >= window})
-            response = await call_next(request)
-
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-    if request.url.path.startswith(("/user/", "/recommendations")):
-        response.headers.setdefault("Cache-Control", "no-store")
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-        "form-action 'self'; img-src 'self' data: https:; media-src 'self' blob: https:; "
-        "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "script-src 'self' 'unsafe-inline'",
-    )
-    if request.url.scheme == "https":
-        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
-    return response
-
 
 @app.middleware("http")
 async def reject_cross_origin_mutations(request: Request, call_next):
@@ -204,7 +117,6 @@ if CORS_ORIGINS:
         allow_origins=CORS_ORIGINS,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", "Authorization"],
-        allow_credentials=AUTH_ENABLED,
     )
 
 app.include_router(router)

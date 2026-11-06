@@ -1,5 +1,5 @@
 """
-Live verification for MovieBox API Pro v2.10.0.
+Live verification for MovieBox API Pro v2.9.1.
 
 Author: Faisal (https://github.com/faisaljs)
 Repo:   https://github.com/faisaljs/Moviebox-API
@@ -12,15 +12,9 @@ Default: http://localhost:8000
 import sys
 import httpx
 import time
-import os
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
 TIMEOUT = 90
-VERIFY_USER = os.environ.get("MOVIEBOX_AUTH_USER")
-VERIFY_PASSWORD = os.environ.get("MOVIEBOX_AUTH_PASSWORD")
-if bool(VERIFY_USER) != bool(VERIFY_PASSWORD):
-    raise SystemExit("Set both MOVIEBOX_AUTH_USER and MOVIEBOX_AUTH_PASSWORD to verify an authenticated server")
-CLIENT = httpx.Client(auth=(VERIFY_USER, VERIFY_PASSWORD) if VERIFY_USER else None)
 
 
 def hr(label):
@@ -54,7 +48,7 @@ def record(passed):
 # ── 1. dashboard ────────────────────────────────────────────────────────────
 hr("GET /  (dashboard)")
 try:
-    r = CLIENT.get(f"{BASE}/", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/", timeout=TIMEOUT)
     is_html = r.status_code == 200 and "<html" in r.text.lower()
     record(ok(is_html, f"status {r.status_code}, html={'YES' if is_html else 'NO'}"))
 except Exception as e:
@@ -64,7 +58,7 @@ except Exception as e:
 hr("GET /home")
 home_slug = home_sid = None
 try:
-    r = CLIENT.get(f"{BASE}/home", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/home", timeout=TIMEOUT)
     data = r.json()
     secs = data.get("sections", [])
     record(ok(r.status_code == 200 and len(secs) > 0, f"status {r.status_code}, {len(secs)} sections"))
@@ -82,7 +76,7 @@ except Exception as e:
 # ── 3. catalog stats ───────────────────────────────────────────────────────
 hr("GET /catalog/stats")
 try:
-    r = CLIENT.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
     data = r.json()
     total = data.get("total", 0)
     walk = data.get("walk_state", {})
@@ -105,7 +99,7 @@ except Exception as e:
 # ── 4. catalog (indexed) ───────────────────────────────────────────────────
 hr("GET /catalog")
 try:
-    r = CLIENT.get(f"{BASE}/catalog", params={"per_page": 12}, timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/catalog", params={"per_page": 12}, timeout=TIMEOUT)
     data = r.json()
     items = data.get("items", [])
     total = data.get("total", 0)
@@ -120,7 +114,7 @@ except Exception as e:
 hr("GET /catalog?sort=title  and  ?sort=rating")
 for sort in ("title", "rating"):
     try:
-        r = CLIENT.get(f"{BASE}/catalog", params={"sort": sort, "per_page": 3}, timeout=TIMEOUT)
+        r = httpx.get(f"{BASE}/catalog", params={"sort": sort, "per_page": 3}, timeout=TIMEOUT)
         data = r.json()
         record(ok(r.status_code == 200, f"sort={sort}, status {r.status_code}, total={data.get('total')}"))
     except Exception as e:
@@ -130,7 +124,7 @@ for sort in ("title", "rating"):
 hr("GET /catalog?type=movie  /  ?type=tv  /  ?type=anime")
 for t in ("movie", "tv", "anime"):
     try:
-        r = CLIENT.get(f"{BASE}/catalog", params={"type": t, "per_page": 3}, timeout=TIMEOUT)
+        r = httpx.get(f"{BASE}/catalog", params={"type": t, "per_page": 3}, timeout=TIMEOUT)
         data = r.json()
         record(ok(r.status_code == 200, f"type={t}, status {r.status_code}, total={data.get('total')}"))
     except Exception as e:
@@ -139,7 +133,7 @@ for t in ("movie", "tv", "anime"):
 # ── 7. catalog text search ─────────────────────────────────────────────────
 hr("GET /catalog?q=the")
 try:
-    r = CLIENT.get(f"{BASE}/catalog", params={"q": "the", "per_page": 3}, timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/catalog", params={"q": "the", "per_page": 3}, timeout=TIMEOUT)
     data = r.json()
     items = data.get("items", [])
     record(ok(r.status_code == 200, f"status {r.status_code}, matches={data.get('total')}"))
@@ -150,7 +144,7 @@ except Exception as e:
 # ── 8. catalog refresh ─────────────────────────────────────────────────────
 hr("POST /catalog/refresh")
 try:
-    r = CLIENT.post(f"{BASE}/catalog/refresh", timeout=TIMEOUT)
+    r = httpx.post(f"{BASE}/catalog/refresh", timeout=TIMEOUT)
     data = r.json()
     record(ok(r.status_code == 200 and "status" in data,
               f"status {r.status_code}, response={data.get('status')}"))
@@ -161,7 +155,7 @@ except Exception as e:
 for path in ("/movies", "/tv-series", "/animation"):
     hr(f"GET {path}")
     try:
-        r = CLIENT.get(f"{BASE}{path}", timeout=TIMEOUT)
+        r = httpx.get(f"{BASE}{path}", timeout=TIMEOUT)
         data = r.json()
         items = data.get("items", [])
         record(ok(r.status_code == 200 and len(items) > 0,
@@ -172,7 +166,7 @@ for path in ("/movies", "/tv-series", "/animation"):
 # ── 10. search ─────────────────────────────────────────────────────────────
 hr("GET /search?q=matrix")
 try:
-    r = CLIENT.get(f"{BASE}/search", params={"q": "matrix"}, timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/search", params={"q": "matrix"}, timeout=TIMEOUT)
     data = r.json()
     record(ok(r.status_code == 200, f"status {r.status_code}, total={data.get('total')}"))
 except Exception as e:
@@ -182,7 +176,7 @@ except Exception as e:
 hr("GET /detail/{slug}")
 if home_slug:
     try:
-        r = CLIENT.get(f"{BASE}/detail/{home_slug}", timeout=TIMEOUT)
+        r = httpx.get(f"{BASE}/detail/{home_slug}", timeout=TIMEOUT)
         data = r.json()
         inner = data.get("data", {}) or {}
         record(ok(r.status_code == 200 and bool(inner), f"status {r.status_code}, keys={list(inner.keys())[:6]}"))
@@ -195,7 +189,7 @@ else:
 hr("GET /api/stream/{sid}")
 if home_sid and home_slug:
     try:
-        r = CLIENT.get(
+        r = httpx.get(
             f"{BASE}/api/stream/{home_sid}",
             params={"detail_path": home_slug},
             timeout=TIMEOUT,
@@ -212,7 +206,7 @@ hr("GET /api/stream/{sid}/captions")
 captions_lang = None
 if home_sid and home_slug:
     try:
-        r = CLIENT.get(
+        r = httpx.get(
             f"{BASE}/api/stream/{home_sid}/captions",
             params={"detail_path": home_slug},
             timeout=TIMEOUT,
@@ -231,7 +225,7 @@ else:
 hr("GET /api/stream/{sid}/proxy  (Range)")
 if home_sid and home_slug:
     try:
-        with CLIENT.stream(
+        with httpx.stream(
             "GET",
             f"{BASE}/api/stream/{home_sid}/proxy",
             params={"detail_path": home_slug, "res": "best"},
@@ -253,7 +247,7 @@ else:
 hr("GET /api/stream/{sid}/subtitles/{lang}")
 if home_sid and home_slug and captions_lang:
     try:
-        r = CLIENT.get(
+        r = httpx.get(
             f"{BASE}/api/stream/{home_sid}/subtitles/{captions_lang}",
             params={"detail_path": home_slug},
             timeout=TIMEOUT,
@@ -271,7 +265,7 @@ else:
 # ── 16. tab variants ───────────────────────────────────────────────────────
 hr("GET /api/tabs/variants?tab_id=2")
 try:
-    r = CLIENT.get(f"{BASE}/api/tabs/variants", params={"tab_id": 2}, timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/api/tabs/variants", params={"tab_id": 2}, timeout=TIMEOUT)
     data = r.json()
     variants = data.get("variants", [])
     record(ok(r.status_code == 200, f"status {r.status_code}, {len(variants)} variants tested"))
@@ -287,38 +281,18 @@ except Exception as e:
 # ── 17. health ─────────────────────────────────────────────────────────────
 hr("GET /health")
 try:
-    r = CLIENT.get(f"{BASE}/health", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/health", timeout=TIMEOUT)
     data = r.json()
-    record(ok(r.status_code == 200 and data.get("status") == "ok" and bool(data.get("version")),
-              f"status={data.get('status')} version={data.get('version')}"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-hr("GET /health/ready")
-try:
-    r = CLIENT.get(f"{BASE}/health/ready", timeout=TIMEOUT)
-    data = r.json()
-    checks = data.get("checks", {})
-    record(ok(r.status_code == 200 and data.get("status") == "ready"
-              and checks.get("http_client") and checks.get("database"),
-              f"status={data.get('status')} checks={checks}"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-hr("GET /health/details")
-try:
-    r = CLIENT.get(f"{BASE}/health/details", timeout=TIMEOUT)
-    data = r.json()
-    record(ok(r.status_code == 200 and "providers" in data and "catalog_indexed" in data,
-              f"version={data.get('version')} indexed={data.get('catalog_indexed')} "
-              f"providers={len(data.get('providers', {}))}"))
+    record(ok(r.status_code == 200 and data.get("status") == "ok",
+              f"version={data.get('version')} tokens_cached={data.get('tokens_cached')} "
+              f"indexed={data.get('catalog_indexed')} walk_running={data.get('walk_running')}"))
 except Exception as e:
     record(ok(False, f"exception: {e}"))
 
 # ── 18. frontend ───────────────────────────────────────────────────────────
 hr("GET /app  (frontend)")
 try:
-    r = CLIENT.get(f"{BASE}/app", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/app", timeout=TIMEOUT)
     is_html = r.status_code == 200 and "<html" in r.text.lower() and "MovieBox" in r.text
     record(ok(is_html, f"status {r.status_code}, html={'YES' if is_html else 'NO'}"))
 except Exception as e:
@@ -327,7 +301,7 @@ except Exception as e:
 # ── 19. providers ──────────────────────────────────────────────────────────
 hr("GET /providers")
 try:
-    r = CLIENT.get(f"{BASE}/providers", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/providers", timeout=TIMEOUT)
     data = r.json()
     providers_list = data.get("providers", [])
     record(ok(r.status_code == 200 and len(providers_list) > 0,
@@ -342,7 +316,7 @@ except Exception as e:
 # ── 20. providers probe ────────────────────────────────────────────────────
 hr("POST /providers/probe")
 try:
-    r = CLIENT.post(f"{BASE}/providers/probe", timeout=TIMEOUT)
+    r = httpx.post(f"{BASE}/providers/probe", timeout=TIMEOUT)
     data = r.json()
     probe_results = data.get("results", [])
     alive = sum(1 for x in probe_results if x.get("alive"))
@@ -354,7 +328,7 @@ except Exception as e:
 # ── 21. legacy hosts ───────────────────────────────────────────────────────
 hr("GET /api/hosts")
 try:
-    r = CLIENT.get(f"{BASE}/api/hosts", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/api/hosts", timeout=TIMEOUT)
     data = r.json()
     host_results = data.get("results", [])
     alive = [x for x in host_results if x.get("alive")]
@@ -371,7 +345,7 @@ except Exception as e:
 # ── 22. catalog stats by host ──────────────────────────────────────────────
 hr("GET /catalog/stats — by_host")
 try:
-    r = CLIENT.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
     data = r.json()
     by_host = data.get("by_host", {})
     record(ok(r.status_code == 200, f"status {r.status_code}, {len(by_host)} hosts in catalog"))
@@ -384,15 +358,15 @@ except Exception as e:
 hr("POST /user/bookmarks  →  GET  →  DELETE")
 test_slug = "verify-test-bookmark-" + str(int(time.time()))
 try:
-    r = CLIENT.post(f"{BASE}/user/bookmarks", json={
+    r = httpx.post(f"{BASE}/user/bookmarks", json={
         "slug": test_slug, "name": "Verify Test", "poster_url": None,
     }, timeout=TIMEOUT)
     post_ok = r.status_code == 200
-    r = CLIENT.get(f"{BASE}/user/bookmarks", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/user/bookmarks", timeout=TIMEOUT)
     data = r.json()
     bookmarks = data.get("bookmarks", [])
     found = any(b.get("slug") == test_slug for b in bookmarks)
-    r = CLIENT.delete(f"{BASE}/user/bookmarks/{test_slug}", timeout=TIMEOUT)
+    r = httpx.delete(f"{BASE}/user/bookmarks/{test_slug}", timeout=TIMEOUT)
     del_ok = r.status_code == 200
     record(ok(post_ok and found and del_ok,
               f"post={post_ok} found={found} delete={del_ok} count={len(bookmarks)}"))
@@ -403,15 +377,15 @@ except Exception as e:
 hr("POST /user/history  →  GET  →  DELETE")
 test_hist_slug = "verify-test-history-" + str(int(time.time()))
 try:
-    r = CLIENT.post(f"{BASE}/user/history", json={
+    r = httpx.post(f"{BASE}/user/history", json={
         "slug": test_hist_slug, "se": 1, "ep": 1, "position": 30, "duration": 100,
     }, timeout=TIMEOUT)
     post_ok = r.status_code == 200
-    r = CLIENT.get(f"{BASE}/user/history", timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/user/history", timeout=TIMEOUT)
     data = r.json()
     history = data.get("history", [])
     found = any(h.get("slug") == test_hist_slug for h in history)
-    r = CLIENT.delete(f"{BASE}/user/history/{test_hist_slug}", timeout=TIMEOUT)
+    r = httpx.delete(f"{BASE}/user/history/{test_hist_slug}", timeout=TIMEOUT)
     del_ok = r.status_code == 200
     record(ok(post_ok and found and del_ok,
               f"post={post_ok} found={found} delete={del_ok} count={len(history)}"))
@@ -421,7 +395,7 @@ except Exception as e:
 # ── 25. recommendations ───────────────────────────────────────────────────
 hr("GET /recommendations")
 try:
-    r = CLIENT.get(f"{BASE}/recommendations", params={"limit": 10}, timeout=TIMEOUT)
+    r = httpx.get(f"{BASE}/recommendations", params={"limit": 10}, timeout=TIMEOUT)
     data = r.json()
     items = data.get("items", [])
     record(ok(r.status_code == 200, f"status {r.status_code}, count={data.get('count')}"))
@@ -434,7 +408,7 @@ except Exception as e:
 hr("GET /recommendations/because/{slug}")
 if home_slug:
     try:
-        r = CLIENT.get(f"{BASE}/recommendations/because/{home_slug}", params={"limit": 8}, timeout=TIMEOUT)
+        r = httpx.get(f"{BASE}/recommendations/because/{home_slug}", params={"limit": 8}, timeout=TIMEOUT)
         data = r.json()
         items = data.get("items", [])
         record(ok(r.status_code == 200, f"status {r.status_code}, source={data.get('title')}, items={len(items)}"))
@@ -447,5 +421,4 @@ else:
 hr("SUMMARY")
 print(f"  passed: {results['pass']}")
 print(f"  failed: {results['fail']}")
-CLIENT.close()
 sys.exit(0 if results["fail"] == 0 else 1)
