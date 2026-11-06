@@ -9,10 +9,23 @@ from env_loader import load_environment
 
 load_environment()
 
-API_VERSION = "2.9.1"
+API_VERSION = "2.10.0"
 
 PORT = int(os.environ.get("PORT", "8000"))
 BIND_HOST = os.environ.get("MOVIEBOX_BIND_HOST", "127.0.0.1")
+AUTH_USER = os.environ.get("MOVIEBOX_AUTH_USER", "")
+AUTH_PASSWORD = os.environ.get("MOVIEBOX_AUTH_PASSWORD", "")
+if bool(AUTH_USER) != bool(AUTH_PASSWORD):
+    raise RuntimeError("Set both MOVIEBOX_AUTH_USER and MOVIEBOX_AUTH_PASSWORD, or neither")
+if BIND_HOST not in {"127.0.0.1", "localhost", "::1"} and not (AUTH_USER and AUTH_PASSWORD):
+    raise RuntimeError(
+        "Non-loopback binds require MOVIEBOX_AUTH_USER and MOVIEBOX_AUTH_PASSWORD"
+    )
+if BIND_HOST not in {"127.0.0.1", "localhost", "::1"} and len(AUTH_PASSWORD) < 16:
+    raise RuntimeError("MOVIEBOX_AUTH_PASSWORD must be at least 16 characters on non-loopback binds")
+AUTH_ENABLED = bool(AUTH_USER and AUTH_PASSWORD)
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "240"))
+EXPENSIVE_RATE_LIMIT_PER_MINUTE = int(os.environ.get("EXPENSIVE_RATE_LIMIT_PER_MINUTE", "30"))
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "25"))
 DOMAIN_TTL = int(os.environ.get("DOMAIN_TTL", "300"))
 CORS_ORIGINS = [
@@ -20,6 +33,8 @@ CORS_ORIGINS = [
     for origin in os.environ.get("CORS_ORIGINS", "").split(",")
     if origin.strip() and origin.strip() != "*"
 ]
+if RATE_LIMIT_PER_MINUTE < 1 or EXPENSIVE_RATE_LIMIT_PER_MINUTE < 1:
+    raise RuntimeError("Rate limit settings must be positive integers")
 
 TAB_MOVIES = int(os.environ.get("TAB_MOVIES", "2"))
 TAB_TV = int(os.environ.get("TAB_TV", "5"))

@@ -106,6 +106,31 @@ async def debug_upstream(path: str, method: str = "GET", payload: str | None = N
 
 @router.get("/health")
 async def health():
+    """Unauthenticated process liveness endpoint for container probes."""
+    return {"status": "ok", "version": API_VERSION}
+
+
+@router.get("/health/ready")
+async def readiness():
+    """Readiness check for authenticated operators and deployment probes."""
+    checks = {
+        "http_client": state.client is not None,
+        "database": False,
+    }
+    try:
+        checks["database"] = storage.read_scalar("SELECT 1") == 1
+    except Exception:
+        pass
+    ready = all(checks.values())
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
+
+
+@router.get("/health/details")
+async def health_details():
     now = time.time()
     providers_health = {
         h: {

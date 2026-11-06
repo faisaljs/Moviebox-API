@@ -215,6 +215,13 @@ def main() -> int:
 
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        if not (os.environ.get("MOVIEBOX_AUTH_USER") and os.environ.get("MOVIEBOX_AUTH_PASSWORD")):
+            parser.error(
+                "Non-loopback binds require MOVIEBOX_AUTH_USER and MOVIEBOX_AUTH_PASSWORD"
+            )
+        if len(os.environ["MOVIEBOX_AUTH_PASSWORD"]) < 16:
+            parser.error("MOVIEBOX_AUTH_PASSWORD must be at least 16 characters on non-loopback binds")
 
     if args.host in ("0.0.0.0", "::"):
         browser_host = "127.0.0.1"
