@@ -451,7 +451,6 @@ pre.json .b { color: #f472b6; }
 <script>
 'use strict';
 
-// ─── UTIL ────────────────────────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -486,7 +485,6 @@ function jsonView(obj) {
   return `<pre class="json">${html}</pre>`;
 }
 
-// ─── STATE ───────────────────────────────────────────────────────────────
 const S = {
   view: 'health',
   subject: null,
@@ -495,7 +493,6 @@ const S = {
   q: '',
 };
 
-// ─── ROUTER ──────────────────────────────────────────────────────────────
 document.querySelectorAll('nav a[data-view]').forEach(a => {
   a.addEventListener('click', () => {
     document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
@@ -520,7 +517,6 @@ function render() {
   }
 }
 
-// ─── HEALTH ──────────────────────────────────────────────────────────────
 async function renderHealth(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -615,7 +611,6 @@ function setHealthDot(ok) {
   dot.className = 'dot ' + (ok ? 'ok' : 'err');
 }
 
-// ─── PROVIDERS ───────────────────────────────────────────────────────────
 async function renderProviders(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -686,7 +681,6 @@ async function resetProviders() {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-// ─── POSTER CARD ─────────────────────────────────────────────────────────
 function posterCard(item) {
   const meta = [item.rating && `★ ${item.rating}`, item.year].filter(Boolean).join(' · ');
   return `
@@ -708,13 +702,10 @@ function posterCard(item) {
   `;
 }
 
-// ─── SUBJECT PICK + AUTO-DETECT MOVIE/SERIES ─────────────────────────────
 async function pickSubject(subject) {
   S.subject = { ...subject, autoSe: 0, autoEp: 0 };
   S.detail = null;
 
-  // Fetch detail in the background to detect movie vs series and pick
-  // a working (se, ep). Movie → (0,0). Series → first season, ep 1.
   if (subject.slug) {
     try {
       const d = await api('/detail/' + encodeURIComponent(subject.slug));
@@ -729,11 +720,9 @@ async function pickSubject(subject) {
       ) || [];
 
       if (st === 2 || st === 7) {
-        // Series (2 = TV, 7 = short-form) — pick first season, ep 1
         const firstSeason = seasons.find(s => (s.se || s.episodes) || s.maxEp);
         if (firstSeason) {
           S.subject.autoSe = firstSeason.se || 1;
-          // Find first episode in the season, or default to 1
           const eps = firstSeason.episodes || [];
           S.subject.autoEp = eps.length && eps[0].ep ? eps[0].ep : 1;
         } else {
@@ -741,10 +730,7 @@ async function pickSubject(subject) {
           S.subject.autoEp = 1;
         }
       }
-      // Movie (1) or unknown → keep (0,0)
-    } catch (_) {
-      // Detail failed — fall back to (0,0), upstream fallback handles it
-    }
+    } catch (_) {}
   }
 
   document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
@@ -753,7 +739,6 @@ async function pickSubject(subject) {
   render();
 }
 
-// ─── HOME ────────────────────────────────────────────────────────────────
 async function renderHome(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -776,7 +761,6 @@ async function renderHome(el) {
   }
 }
 
-// ─── SEARCH ──────────────────────────────────────────────────────────────
 function renderSearch(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -864,7 +848,6 @@ async function doSearch(q) {
   }
 }
 
-// ─── BROWSE ──────────────────────────────────────────────────────────────
 async function renderBrowse(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -905,7 +888,6 @@ async function doBrowse() {
   }
 }
 
-// ─── STREAM ──────────────────────────────────────────────────────────────
 function renderStream(el) {
   const s = S.subject || {};
   el.innerHTML = `
@@ -939,7 +921,6 @@ function renderStream(el) {
     <div id="stream-body"></div>
   `;
 
-  // Auto-fetch if we arrived here from a poster click
   if (s.sid && s.slug) fetchStream();
 }
 
@@ -960,8 +941,6 @@ async function fetchStream() {
     ]);
 
     if (!stream.has_resource) {
-      // Episode picker fallback: render clickable S/E buttons from the
-      // seasons array we fetched in pickSubject, if available.
       const resource = (S.detail && S.detail.data || {}).resource || {};
       const seasons = resource.seasons || resource.seasonList || (resource.data || {}).seasons || [];
 
@@ -998,8 +977,6 @@ async function fetchStream() {
       return;
     }
 
-    // If the server resolved to a different (se, ep) than requested,
-    // update the inputs so the UI is honest about what's playing.
     if (stream.fell_back_to_movie || stream.se !== parseInt(se) || stream.ep !== parseInt(ep)) {
       $('#stream-se').value = stream.se;
       $('#stream-ep').value = stream.ep;
@@ -1074,7 +1051,6 @@ function playSource(sid, slug, se, ep, res) {
   `;
 }
 
-// ─── DEBUG ───────────────────────────────────────────────────────────────
 function renderDebug(el) {
   el.innerHTML = `
     <div class="view-header">
@@ -1102,7 +1078,6 @@ async function debugRun(path, method = 'GET') {
   }
 }
 
-// ─── API REFERENCE ───────────────────────────────────────────────────────
 function renderApi(el) {
   const groups = [
     {
@@ -1186,7 +1161,6 @@ function renderApi(el) {
   `;
 }
 
-// ─── BOOT ────────────────────────────────────────────────────────────────
 refreshHealth(true);
 render();
 </script>

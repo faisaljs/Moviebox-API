@@ -1,31 +1,9 @@
-#!/usr/bin/env python3
-"""
-Live verification for MovieBox API Pro.
-
-Author: Faisal (https://github.com/faisaljs)
-Repo:   https://github.com/faisaljs/Moviebox-API
-License: MIT
-
-Run against a live server: python verify.py [base_url]
-Default: http://127.0.0.1:8000
-
-Exits 0 on all pass, 1 on any fail, 2 if the server is unreachable.
-Skips (no slug, no captions, etc.) don't count as failures — they're just
-"upstream didn't give us enough to test".
-
-Fixture picking: probes the top 5 search results and uses whichever has the
-most stream sources, so the proxy/caption/subtitle tests run against a
-title that can actually exercise them. Cached by upstream.resolve_stream
-for 30s, so the extra probes don't cost the later stream call.
-"""
-
 import sys
 import httpx
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 TIMEOUT = 90
 
-# Fast-fail: if /health doesn't respond, the rest is noise.
 try:
     httpx.get(f"{BASE}/health", timeout=5)
 except httpx.RequestError as e:
@@ -55,7 +33,6 @@ def skip(msg):
     results["skip"] += 1
 
 
-# ── 1. /health ──────────────────────────────────────────────────────────────
 hr("GET /health")
 try:
     r = httpx.get(f"{BASE}/health", timeout=TIMEOUT)
@@ -70,7 +47,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 2. /providers ───────────────────────────────────────────────────────────
 hr("GET /providers")
 try:
     r = httpx.get(f"{BASE}/providers", timeout=TIMEOUT)
@@ -85,7 +61,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 3. /providers/probe ─────────────────────────────────────────────────────
 hr("POST /providers/probe")
 try:
     r = httpx.post(f"{BASE}/providers/probe", timeout=TIMEOUT)
@@ -98,7 +73,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 4. /api/hosts (legacy) ──────────────────────────────────────────────────
 hr("GET /api/hosts")
 try:
     r = httpx.get(f"{BASE}/api/hosts", timeout=TIMEOUT)
@@ -110,7 +84,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 5. /home ────────────────────────────────────────────────────────────────
 hr("GET /home")
 home_slug = None
 home_sid = None
@@ -136,7 +109,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 6. /home/all ────────────────────────────────────────────────────────────
 hr("GET /home/all")
 try:
     r = httpx.get(f"{BASE}/home/all", timeout=TIMEOUT)
@@ -147,7 +119,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 7. /sections ────────────────────────────────────────────────────────────
 hr("GET /sections")
 try:
     r = httpx.get(f"{BASE}/sections", timeout=TIMEOUT)
@@ -158,7 +129,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 8. /browse/{section} ────────────────────────────────────────────────────
 hr("GET /browse/Cinema")
 try:
     r = httpx.get(f"{BASE}/browse/Cinema", timeout=TIMEOUT)
@@ -168,7 +138,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 9. /movies, /tv-series, /animation ──────────────────────────────────────
 for path in ("/movies", "/tv-series", "/animation"):
     hr(f"GET {path}")
     try:
@@ -179,10 +148,10 @@ for path in ("/movies", "/tv-series", "/animation"):
         check(False, f"exception: {e}")
 
 
-# ── 10. /search ─────────────────────────────────────────────────────────────
 hr("GET /search?q=matrix")
 matrix_slug = None
 matrix_sid = None
+items = []
 try:
     r = httpx.get(f"{BASE}/search", params={"q": "matrix"}, timeout=TIMEOUT)
     d = r.json()
@@ -200,7 +169,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 10b. Fixture picking: probe top-5 search results, use max-sources one ──
 if matrix_slug and matrix_sid:
     hr("Picking fixture (max sources among top-5)")
     candidates = [(i.get("slug"), i.get("subject_id")) for i in items[:5] if i.get("slug") and i.get("subject_id")]
@@ -229,7 +197,6 @@ else:
     skip("no search results to pick from")
 
 
-# ── 11. /search/suggest?enrich=true ─────────────────────────────────────────
 hr("GET /search/suggest?q=break&enrich=true")
 try:
     r = httpx.get(f"{BASE}/search/suggest",
@@ -244,7 +211,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 12. /detail/{slug} ──────────────────────────────────────────────────────
 hr("GET /detail/{slug}")
 if matrix_slug:
     try:
@@ -268,7 +234,6 @@ else:
     skip("no slug")
 
 
-# ── 13. /api/stream/{sid} ───────────────────────────────────────────────────
 stream_sid = matrix_sid or home_sid
 stream_slug = matrix_slug or home_slug
 hr("GET /api/stream/{sid}")
@@ -291,7 +256,6 @@ else:
     skip("no sid/slug")
 
 
-# ── 14. /api/stream/{sid}/captions ──────────────────────────────────────────
 hr("GET /api/stream/{sid}/captions")
 captions_lang = None
 if stream_sid and stream_slug:
@@ -312,7 +276,6 @@ else:
     skip("no sid")
 
 
-# ── 15. /api/stream/{sid}/proxy (Range + byte signature) ────────────────────
 hr("GET /api/stream/{sid}/proxy  (Range: bytes=0-1048575)")
 if stream_ok:
     try:
@@ -333,7 +296,6 @@ if stream_ok:
                     break
             check(r.status_code in (200, 206), f"status {r.status_code}, {total} bytes")
             check(total >= 1048576, f"received at least 1MB")
-            # MP4 first box: [size:4][type:4] where type == b"ftyp"
             is_mp4 = len(first) >= 8 and first[4:8] == b"ftyp"
             check(is_mp4, f"first bytes look like MP4 (hex={first[:12].hex()})")
     except Exception as e:
@@ -342,7 +304,6 @@ else:
     skip("no stream sources")
 
 
-# ── 16. /api/stream/{sid}/subtitles/{lang} ──────────────────────────────────
 hr("GET /api/stream/{sid}/subtitles/{lang}")
 if stream_sid and stream_slug and captions_lang:
     try:
@@ -360,7 +321,6 @@ else:
     skip("no sid")
 
 
-# ── 17. /api/tabs ──────────────────────────────────────────────────────────
 hr("GET /api/tabs?min_id=2&max_id=3")
 try:
     r = httpx.get(f"{BASE}/api/tabs",
@@ -372,7 +332,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 18. /api/tabs/variants ─────────────────────────────────────────────────
 hr("GET /api/tabs/variants?tab_id=2")
 try:
     r = httpx.get(f"{BASE}/api/tabs/variants",
@@ -390,7 +349,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 19. /api/debug/upstream ────────────────────────────────────────────────
 hr("GET /api/debug/upstream")
 try:
     r = httpx.get(f"{BASE}/api/debug/upstream",
@@ -402,7 +360,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 20. /debug/tokens ──────────────────────────────────────────────────────
 hr("GET /debug/tokens")
 try:
     r = httpx.get(f"{BASE}/debug/tokens", timeout=TIMEOUT)
@@ -413,7 +370,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 21. /debug/fetch-token ─────────────────────────────────────────────────
 hr("POST /debug/fetch-token")
 try:
     r = httpx.post(f"{BASE}/debug/fetch-token", timeout=TIMEOUT)
@@ -424,7 +380,6 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── 22. /debug/play ────────────────────────────────────────────────────────
 hr("POST /debug/play")
 if stream_sid and stream_slug:
     try:
@@ -440,7 +395,6 @@ else:
     skip("no sid")
 
 
-# ── 23. /docs, /openapi.json ───────────────────────────────────────────────
 hr("GET /docs  and  /openapi.json")
 try:
     r = httpx.get(f"{BASE}/docs", timeout=TIMEOUT)
@@ -454,7 +408,18 @@ except Exception as e:
     check(False, f"exception: {e}")
 
 
-# ── summary ────────────────────────────────────────────────────────────────
+hr("GET /  and  /dashboard")
+try:
+    r = httpx.get(f"{BASE}/", timeout=TIMEOUT)
+    check(r.status_code == 200 and "<!doctype" in r.text.lower(),
+          f"/ status {r.status_code}")
+    r = httpx.get(f"{BASE}/dashboard", timeout=TIMEOUT)
+    check(r.status_code == 200 and "<!doctype" in r.text.lower(),
+          f"/dashboard status {r.status_code}")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
 hr("SUMMARY")
 total = results["pass"] + results["fail"] + results["skip"]
 print(f"  total:   {total}")

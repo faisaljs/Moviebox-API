@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import re
 
 

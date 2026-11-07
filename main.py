@@ -1,11 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-
-Pure REST API for moviebox.ph. Stateless proxy — no UI, no DB, no persistence.
-"""
-
 import os
 import asyncio
 from pathlib import Path
@@ -20,6 +12,10 @@ from config import (
     API_VERSION, PORT, BIND_HOST, CORS_ORIGINS, REQUEST_TIMEOUT,
 )
 from routes import router
+
+
+APP_PATH = Path(__file__).parent / "app.html"
+DASHBOARD_PATH = Path(__file__).parent / "api_dashboard.html"
 
 
 @asynccontextmanager
@@ -50,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MovieBox API Pro",
-    description="Pure REST API for moviebox.ph. Stateless proxy — no UI, no DB, no persistence.",
+    description="Pure REST API for moviebox.ph with a stateless UI frontend.",
     version=API_VERSION,
     contact={"name": "Faisal", "url": "https://github.com/faisaljs"},
     license_info={
@@ -63,8 +59,6 @@ app = FastAPI(
 
 @app.middleware("http")
 async def reject_cross_origin_mutations(request: Request, call_next):
-    # No auth cookie exists, so CSRF isn't strictly possible — but reject
-    # browser-originated mutations from untrusted origins anyway.
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
         if origin:
@@ -90,17 +84,28 @@ if CORS_ORIGINS:
 
 app.include_router(router)
 
-DASHBOARD_PATH = Path(__file__).parent / "api_dashboard.html"
-
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def dashboard():
+@app.get("/app", response_class=HTMLResponse, include_in_schema=False)
+async def app_ui():
+    if not APP_PATH.is_file():
+        return HTMLResponse(
+            "<h1>app.html not found in app directory</h1>"
+            "<p>Create app.html next to main.py or use /dashboard for the operator console.</p>",
+            status_code=404,
+        )
+    return HTMLResponse(APP_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard_ui():
     if not DASHBOARD_PATH.is_file():
         return HTMLResponse(
-            "<h1>api_dashboard.html not found in app directory</h1>",
+            "<h1>api_dashboard.html not found</h1>",
             status_code=404,
         )
     return HTMLResponse(DASHBOARD_PATH.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     import uvicorn

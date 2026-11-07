@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 from fastapi import APIRouter, HTTPException
 import upstream
 from config import DEFAULT_HOST

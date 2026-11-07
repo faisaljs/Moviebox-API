@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import json
 import time
 from fastapi import APIRouter, HTTPException, Query
@@ -101,6 +95,7 @@ async def debug_upstream(path: str, method: str = "GET", payload: str | None = N
         return resp.json()
     except Exception as e:
         raise HTTPException(502, detail=f"debug upstream failed: {e}")
+
 
 @router.get("/debug/tokens")
 async def debug_tokens():

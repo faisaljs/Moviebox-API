@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import os
 from env_loader import load_environment
 
@@ -73,9 +67,6 @@ PLAYER_HEADERS = {
     "sec-fetch-site": "same-origin",
 }
 
-# Substring keywords used to classify home sections into movie / tv / anime
-# buckets. Substring matching (not exact) so this survives geo-shifted home
-# feeds — Singapore says "Popular Movie", Mumbai says "Cinema", both match.
 CATALOG_SECTIONS = {
     "movies": ["movie", "cinema", "nollywood", "bollywood", "hollywood", "south indian"],
     "tv-series": ["series", "tv", "show", "drama"],

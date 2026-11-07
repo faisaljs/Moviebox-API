@@ -9,15 +9,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install deps first so the layer caches across source changes.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the app source. No data dir — the app is stateless.
-COPY main.py config.py state.py providers.py upstream.py helpers.py env_loader.py api_dashboard.html ./
+COPY main.py config.py state.py providers.py upstream.py helpers.py env_loader.py ./
 COPY routes/ ./routes/
+COPY app.html api_dashboard.html ./
 
-# Non-root user. The app writes nothing to disk, so this is just hygiene.
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
     && chown -R app:app /app
 USER app

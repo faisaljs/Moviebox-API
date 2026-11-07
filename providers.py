@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import time
 import asyncio
 import httpx
@@ -91,8 +85,6 @@ def ordered_candidates(preferred: str | None, strict: bool) -> list[str]:
     rest.sort()
     ordered.extend(h for _, h in rest)
 
-    # If every circuit is open, allow only the host whose cooldown ends
-    # first to receive a recovery attempt.
     if not ordered and provider_state:
         first = min(
             provider_state.items(),
@@ -123,6 +115,7 @@ async def probe_provider(host: str) -> dict:
     except Exception as e:
         mark_failure(host, str(e))
         return {"host": host, "alive": False, "error": str(e)[:120]}
+
 
 async def probe_loop():
     await asyncio.sleep(5)

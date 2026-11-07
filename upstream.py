@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import re
 import json
 import time
@@ -24,10 +18,8 @@ HOME_CACHE_MAX = 32
 
 
 class _ProviderError(Exception):
-    """Internal: a single provider attempt failed. bff_request handles retry/rotation."""
+    pass
 
-
-# ─── URL HELPERS ─────────────────────────────────────────────────────────────
 
 def _add_host_param(path: str, host: str) -> str:
     if "?" in path:
@@ -36,19 +28,6 @@ def _add_host_param(path: str, host: str) -> str:
         return f"{base}?{'&'.join(params)}&host={host}" if params else f"{base}?host={host}"
     return f"{path}?host={host}"
 
-
-# ─── TOKEN MANAGEMENT ────────────────────────────────────────────────────────
-#
-# Why minimal headers: upstream's token endpoint refuses to issue an x-user
-# session for requests that carry `sec-fetch-site: cross-site` / `sec-fetch-
-# mode: cors`. Browser-fingerprint headers work for /subject/search (which
-# only needs the Bearer token once we have it) but block the harvest itself.
-# Strip down to the two headers that matter and upstream hands us a token.
-#
-# Why a fresh client: the shared httpx client accumulates `set-cookie: token=`
-# from probe_loop and prior /home calls. Once it has a stale cookie, upstream
-# returns 200 without an x-user header (silent harvest failure). Per-call
-# client guarantees a clean session.
 
 async def _fetch_token(host: str) -> str:
     try:
@@ -68,7 +47,6 @@ async def _fetch_token(host: str) -> str:
         print(f"[fetch_token] {host}: HTTP {resp.status_code}")
         return ""
 
-    # Primary source: x-user header (JSON blob with token field)
     x_user = resp.headers.get("x-user")
     if x_user:
         try:
@@ -80,7 +58,6 @@ async def _fetch_token(host: str) -> str:
         except json.JSONDecodeError:
             pass
 
-    # Fallback: token= from set-cookie
     cookie = resp.headers.get("set-cookie", "")
     m = re.search(r"token=([^;]+)", cookie)
     if m:
@@ -117,8 +94,6 @@ def _capture_rotated_token(host: str, resp: httpx.Response) -> str | None:
     return None
 
 
-# ─── ONE PROVIDER ATTEMPT ────────────────────────────────────────────────────
-
 async def _request_once(
     url: str, method: str, payload: dict | None, headers: dict,
 ) -> httpx.Response:
@@ -134,9 +109,6 @@ async def _request_once(
 async def _attempt(
     host: str, path: str, method: str, payload: dict | None,
 ) -> tuple[dict, float]:
-    """Single provider attempt. Raises _ProviderError on any failure."""
-    # Clear shared-client cookies — a stale token cookie from probe_loop or a
-    # prior /home call will shadow the Authorization header upstream-side.
     client = state.require_client()
     client.cookies.clear()
 
@@ -151,9 +123,6 @@ async def _attempt(
     if (rotated := _capture_rotated_token(host, resp)):
         headers["Authorization"] = f"Bearer {rotated}"
 
-    # Upstream returns 400 + {"message": "invalid token"} for bad/expired
-    # tokens — not 401. Same recovery path: drop the cached token, harvest
-    # a fresh one, retry once.
     is_auth_fail = resp.status_code == 401
     if not is_auth_fail and resp.status_code == 400:
         try:
@@ -219,8 +188,6 @@ async def bff_request(
     )
 
 
-# ─── HOME FEED (IN-MEMORY, EVICTED) ──────────────────────────────────────────
-
 async def get_home_operating_list(host: str | None = DEFAULT_HOST) -> list:
     h = host or DEFAULT_HOST
     now = time.time()
@@ -235,8 +202,6 @@ async def get_home_operating_list(host: str | None = DEFAULT_HOST) -> list:
     state.home_cache[h] = (ops, now + HOME_CACHE_TTL)
     return ops
 
-
-# ─── PLAYER DOMAIN ───────────────────────────────────────────────────────────
 
 async def get_player_domain(force_refresh: bool = False) -> str:
     now = time.time()
@@ -255,16 +220,6 @@ def build_player_referer(domain: str, detail_path: str, subject_id: str, se: int
         f"?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
     )
 
-
-# ─── STREAM RESOLUTION ───────────────────────────────────────────────────────
-#
-# The player *page* lives on {domain} (now a static OSS frontend). The API
-# that returns streams lives on API_BASE. We use {domain} only to build the
-# Referer so upstream treats the request as coming from a legitimate player.
-#
-# Convention: movies play at (se=0, ep=0); series play at (se>=1, ep>=1).
-# The two fallbacks below let callers be ignorant of which they're dealing
-# with — ask for either and we recover to the convention that works.
 
 async def _play_attempt(domain: str, subject_id: str, detail_path: str, se: int, ep: int) -> dict:
     client = state.require_client()
@@ -303,8 +258,6 @@ async def _resolve_stream_uncached(
             result = await _play_attempt(domain, subject_id, detail_path, se, ep)
             has = result["data"].get("hasResource", False)
 
-            # Series fallback: caller asked for (0,0), but this is a series.
-            # Convention for series is (>=1, >=1). Try S1E1.
             if not has and se == 0 and ep == 0:
                 try:
                     series = await _play_attempt(domain, subject_id, detail_path, 1, 1)
@@ -315,8 +268,6 @@ async def _resolve_stream_uncached(
                 except HTTPException:
                     pass
 
-            # Movie fallback: caller asked for (>=1, >=1), but this is a movie.
-            # Convention for movies is (0,0). Try the movie path.
             if not has and (se != 0 or ep != 0):
                 try:
                     movie = await _play_attempt(domain, subject_id, detail_path, 0, 0)
@@ -344,8 +295,6 @@ async def _resolve_stream_uncached(
 
 
 async def resolve_stream(subject_id: str, detail_path: str, se: int, ep: int) -> dict:
-    """Memoized for STREAM_CACHE_TTL seconds. Collapses the 3x /play
-    burst (sources + captions + proxy) into one upstream hit."""
     key = (subject_id, detail_path, se, ep)
     now = time.time()
 
