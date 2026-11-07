@@ -62,7 +62,7 @@ def pick_mp4_stream(streams: list, res: str) -> dict | None:
         return None
     if res == "best" or not res:
         return max(streams, key=lambda s: s.get("resolutions") or 0)
-    target = res.rstrip("p")
+    target = res[:-1] if res.endswith("p") else res
     for s in streams:
         if str(s.get("resolutions")) == target:
             return s

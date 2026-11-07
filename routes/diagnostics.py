@@ -8,7 +8,6 @@ import json
 import time
 from fastapi import APIRouter, HTTPException, Query
 import state
-import storage
 import providers
 import upstream
 from config import (
@@ -103,6 +102,54 @@ async def debug_upstream(path: str, method: str = "GET", payload: str | None = N
     except Exception as e:
         raise HTTPException(502, detail=f"debug upstream failed: {e}")
 
+@router.get("/debug/tokens")
+async def debug_tokens():
+    now = time.time()
+    return {
+        "count": len(state.bearer_tokens),
+        "tokens": {
+            host: {
+                "length": len(token),
+                "preview": token[:24] + "..." if len(token) > 24 else token,
+                "age_seconds": int(now - ts),
+            }
+            for host, (token, ts) in state.bearer_tokens.items()
+        },
+        "domain_cache": {
+            "value": state.domain_cache["value"],
+            "expires_in": max(0, int(state.domain_cache["expires"] - now)),
+        },
+    }
+
+
+@router.post("/debug/fetch-token")
+async def debug_fetch_token(host: str = DEFAULT_HOST):
+    token = await upstream._fetch_token(host)
+    return {
+        "host": host,
+        "success": bool(token),
+        "length": len(token),
+        "preview": (token[:24] + "...") if token else None,
+    }
+
+
+@router.post("/debug/play")
+async def debug_play(subject_id: str, detail_path: str, se: int = 0, ep: int = 0):
+    try:
+        domain = await upstream.get_player_domain()
+        result = await upstream._play_attempt(domain, subject_id, detail_path, se, ep)
+        data = result["data"]
+        return {
+            "domain": domain,
+            "referer": result["referer"],
+            "hasResource": data.get("hasResource"),
+            "streams": len(data.get("streams", []) or []),
+            "freeNum": data.get("freeNum"),
+            "raw_keys": list(data.keys()),
+        }
+    except Exception as e:
+        return {"error": type(e).__name__, "detail": str(e)[:300]}
+
 
 @router.get("/health")
 async def health():
@@ -129,7 +176,4 @@ async def health():
         "stream_cache_size": len(state.stream_cache),
         "home_cache_size": len(state.home_cache),
         "client_pool_connections": len(pool.connections) if pool is not None else None,
-        "catalog_indexed": storage.read_scalar("SELECT COUNT(*) FROM subjects") or 0,
-        "walk_running": state.walk_state.get("running", False),
-        "enriching": state.walk_state.get("enriching", False),
     }

@@ -2,26 +2,23 @@
 MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
 Author: Faisal (https://github.com/faisaljs)
 License: MIT
+
+Pure REST API for moviebox.ph. Stateless proxy — no UI, no DB, no persistence.
 """
 
 import os
-import sqlite3
 import asyncio
+from pathlib import Path
 from contextlib import asynccontextmanager
 import httpx
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, HTMLResponse
 
 import state
-import storage
 import providers
-import catalog_worker
 from config import (
-    API_VERSION, PORT, BIND_HOST, CORS_ORIGINS, REQUEST_TIMEOUT, CATALOG_DB, STATIC_DIR,
+    API_VERSION, PORT, BIND_HOST, CORS_ORIGINS, REQUEST_TIMEOUT,
 )
-from dashboard import DASHBOARD_HTML
 from routes import router
 
 
@@ -36,53 +33,26 @@ async def lifespan(app: FastAPI):
         ),
         follow_redirects=True,
     )
-    state.write_conn = sqlite3.connect(CATALOG_DB, check_same_thread=False)
-    state.write_conn.execute("PRAGMA journal_mode=WAL")
-    state.write_conn.execute("PRAGMA synchronous=NORMAL")
-    storage.init_schema()
-
-    # Refuse to start on a corrupt DB — otherwise every write fails silently
-    # with "database disk image is malformed" while reads still succeed,
-    # which is very confusing to debug. Better to fail fast and loud.
-    try:
-        result = state.write_conn.execute("PRAGMA integrity_check").fetchone()
-        if result and result[0] != "ok":
-            print(f"FATAL: {CATALOG_DB} is corrupt ({result[0]})")
-            print(f"Fix: rm -f {CATALOG_DB} {CATALOG_DB}-wal {CATALOG_DB}-shm, then restart")
-            raise SystemExit(1)
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"integrity check skipped: {e}")
-
-    state.background_task = asyncio.create_task(catalog_worker.maintenance_loop())
     state.probe_task = asyncio.create_task(providers.probe_loop())
     try:
         yield
     finally:
-        for t in (state.background_task, state.probe_task):
-            if t is not None:
-                t.cancel()
-                try:
-                    await t
-                except asyncio.CancelledError:
-                    pass
+        if state.probe_task is not None:
+            state.probe_task.cancel()
+            try:
+                await state.probe_task
+            except asyncio.CancelledError:
+                pass
         if state.client is not None:
             await state.client.aclose()
             state.client = None
-        if state.write_conn is not None:
-            state.write_conn.close()
-            state.write_conn = None
 
 
 app = FastAPI(
     title="MovieBox API Pro",
-    description="Full Pure REST API for moviebox.ph — Zero Scraping",
+    description="Pure REST API for moviebox.ph. Stateless proxy — no UI, no DB, no persistence.",
     version=API_VERSION,
-    contact={
-        "name": "Faisal",
-        "url": "https://github.com/faisaljs",
-    },
+    contact={"name": "Faisal", "url": "https://github.com/faisaljs"},
     license_info={
         "name": "MIT",
         "url": "https://github.com/faisaljs/Moviebox-API/blob/main/LICENSE",
@@ -93,9 +63,8 @@ app = FastAPI(
 
 @app.middleware("http")
 async def reject_cross_origin_mutations(request: Request, call_next):
-    # The app has no login cookie to provide CSRF protection. Reject browser
-    # form/fetch mutations from untrusted origins while allowing native clients
-    # that do not send Origin and explicitly configured web clients.
+    # No auth cookie exists, so CSRF isn't strictly possible — but reject
+    # browser-originated mutations from untrusted origins anyway.
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
         if origin:
@@ -120,47 +89,18 @@ if CORS_ORIGINS:
     )
 
 app.include_router(router)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+DASHBOARD_PATH = Path(__file__).parent / "api_dashboard.html"
 
 
-@app.get("/manifest.json")
-async def manifest():
-    path = os.path.join(STATIC_DIR, "manifest.json")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return Response(content=f.read(), media_type="application/manifest+json")
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="manifest.json not found")
-
-
-@app.get("/sw.js")
-async def service_worker():
-    path = os.path.join(STATIC_DIR, "sw.js")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return Response(
-                content=f.read(),
-                media_type="application/javascript",
-                headers={"Service-Worker-Allowed": "/"},
-            )
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="sw.js not found")
-
-
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard():
-    return HTMLResponse(content=DASHBOARD_HTML)
-
-
-@app.get("/app", response_class=HTMLResponse)
-async def frontend_app():
-    path = os.path.join(STATIC_DIR, "app.html")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
-    except FileNotFoundError:
-        return HTMLResponse("<h1>app.html not found in static/</h1>", status_code=404)
-
+    if not DASHBOARD_PATH.is_file():
+        return HTMLResponse(
+            "<h1>api_dashboard.html not found in app directory</h1>",
+            status_code=404,
+        )
+    return HTMLResponse(DASHBOARD_PATH.read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     import uvicorn

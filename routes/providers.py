@@ -7,7 +7,7 @@ License: MIT
 import time
 import asyncio
 from fastapi import APIRouter
-import providers
+import providers as provider_registry
 from config import (
     DEFAULT_HOST, KNOWN_HOSTS,
     CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_SECONDS,
@@ -20,7 +20,7 @@ router = APIRouter()
 async def list_providers():
     now = time.time()
     entries = []
-    for host, st in providers.provider_state.items():
+    for host, st in provider_registry.provider_state.items():
         entries.append({
             "host": host,
             "alive": st["alive"],
@@ -50,18 +50,20 @@ async def list_providers():
 
 @router.post("/providers/probe")
 async def probe_providers():
-    results = await asyncio.gather(*(providers.probe_provider(h) for h in KNOWN_HOSTS))
+    results = await asyncio.gather(
+        *(provider_registry.probe_provider(h) for h in KNOWN_HOSTS)
+    )
     return {"probed": len(results), "results": results}
 
 
 @router.post("/providers/reset")
 async def reset_providers():
-    for st in providers.provider_state.values():
+    for st in provider_registry.provider_state.values():
         st["alive"] = True
         st["consecutive_failures"] = 0
         st["circuit_open_until"] = 0
         st["last_error"] = None
-    return {"status": "reset", "providers": len(providers.provider_state)}
+    return {"status": "reset", "providers": len(provider_registry.provider_state)}
 
 
 @router.get("/api/hosts")
