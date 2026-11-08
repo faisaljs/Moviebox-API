@@ -1,11 +1,5 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 from fastapi import APIRouter, HTTPException
-import catalog_worker
+import upstream
 from config import DEFAULT_HOST
 from helpers import normalize_banner_item, normalize_subject_item
 
@@ -14,7 +8,7 @@ router = APIRouter()
 
 @router.get("/home")
 async def get_home(host: str = DEFAULT_HOST):
-    ops = await catalog_worker.get_home_operating_list(host)
+    ops = await upstream.get_home_operating_list(host)
     sections = []
     for op in ops:
         op_type = op.get("type")
@@ -40,7 +34,7 @@ async def get_home(host: str = DEFAULT_HOST):
 
 @router.get("/home/all")
 async def get_home_aggregate(dedupe: bool = True, host: str = DEFAULT_HOST):
-    ops = await catalog_worker.get_home_operating_list(host)
+    ops = await upstream.get_home_operating_list(host)
     items: list[dict] = []
     seen: set[str] = set()
     for op in ops:
@@ -68,7 +62,7 @@ async def get_home_aggregate(dedupe: bool = True, host: str = DEFAULT_HOST):
 
 @router.get("/sections")
 async def list_sections(host: str = DEFAULT_HOST):
-    ops = await catalog_worker.get_home_operating_list(host)
+    ops = await upstream.get_home_operating_list(host)
     out = []
     for op in ops:
         op_type = op.get("type")
@@ -85,7 +79,7 @@ async def list_sections(host: str = DEFAULT_HOST):
 
 @router.get("/browse/{section}")
 async def browse_section(section: str, page: int = 1, per_page: int = 24, host: str = DEFAULT_HOST):
-    ops = await catalog_worker.get_home_operating_list(host)
+    ops = await upstream.get_home_operating_list(host)
     matched: list[dict] = []
     matched_titles: set[str] = set()
     for op in ops:

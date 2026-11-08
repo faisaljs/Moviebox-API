@@ -1,9 +1,3 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import os
 from env_loader import load_environment
 
@@ -25,13 +19,6 @@ TAB_MOVIES = int(os.environ.get("TAB_MOVIES", "2"))
 TAB_TV = int(os.environ.get("TAB_TV", "5"))
 TAB_ANIMATION = int(os.environ.get("TAB_ANIMATION", "8"))
 
-CATALOG_DB = os.environ.get("CATALOG_DB", "catalog.db")
-CATALOG_REFRESH_INTERVAL = int(os.environ.get("CATALOG_REFRESH_INTERVAL", "21600"))
-CATALOG_KEYWORDS = list("abcdefghijklmnopqrstuvwxyz0123456789")
-CATALOG_MAX_PAGES_PER_KEYWORD = int(os.environ.get("CATALOG_MAX_PAGES_PER_KEYWORD", "50"))
-ENRICH_RATE_LIMIT = float(os.environ.get("ENRICH_RATE_LIMIT", "0.2"))
-ENRICH_BATCH_SIZE = int(os.environ.get("ENRICH_BATCH_SIZE", "20"))
-
 DEFAULT_HOST = os.environ.get("MOVIEBOX_HOST", "moviebox.ph")
 KNOWN_HOSTS = [
     h.strip() for h in os.environ.get(
@@ -47,7 +34,6 @@ CIRCUIT_BREAKER_SECONDS = int(os.environ.get("CIRCUIT_BREAKER_SECONDS", "60"))
 RETRY_BACKOFF = float(os.environ.get("RETRY_BACKOFF", "0.5"))
 
 API_BASE = "https://h5-api.aoneroom.com/wefeed-h5api-bff"
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
@@ -81,9 +67,6 @@ PLAYER_HEADERS = {
     "sec-fetch-site": "same-origin",
 }
 
-# Substring keywords used to classify home sections into movie / tv / anime
-# buckets. Substring matching (not exact) so this survives geo-shifted home
-# feeds — Singapore says "Popular Movie", Mumbai says "Cinema", both match.
 CATALOG_SECTIONS = {
     "movies": ["movie", "cinema", "nollywood", "bollywood", "hollywood", "south indian"],
     "tv-series": ["series", "tv", "show", "drama"],

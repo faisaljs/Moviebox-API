@@ -1,0 +1,1168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovieBox API — Dashboard</title>
+<style>
+:root {
+  --bg: #0a0b10;
+  --surface: #13151c;
+  --surface-hi: #1a1d26;
+  --border: #232733;
+  --border-hi: #2f3442;
+  --text: #e6e8ee;
+  --text-dim: #7a8090;
+  --text-mute: #4a5060;
+  --accent: #ff3d71;
+  --accent-dim: rgba(255, 61, 113, 0.15);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--accent); color: #fff; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.brand {
+  padding: 20px 20px 16px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-mute);
+  transition: background 0.3s;
+}
+.brand .dot.ok { background: var(--success); box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+.brand .dot.err { background: var(--error); box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+nav { padding: 12px; flex: 1; overflow-y: auto; }
+nav a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+nav a:hover { background: var(--surface-hi); color: var(--text); }
+nav a.active { background: var(--accent-dim); color: var(--accent); }
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar-footer a {
+  color: var(--text-mute);
+  text-decoration: none;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.sidebar-footer a:hover { color: var(--text); background: var(--surface-hi); }
+
+main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+  overflow-y: auto;
+  height: 100vh;
+}
+.view-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.view-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.view-header .sub { color: var(--text-mute); font-size: 12px; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-mute);
+  margin-bottom: 12px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-mute);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  font-family: var(--mono);
+}
+.stat-value.ok { color: var(--success); }
+.stat-value.err { color: var(--error); }
+.stat-value.mono { font-size: 14px; font-weight: 500; }
+.stat-sub { color: var(--text-mute); font-size: 12px; margin-top: 4px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-mute);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface-hi); }
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: -apple-system, sans-serif;
+}
+.tag.ok { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+.tag.err { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+.tag.warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+.tag.dim { background: var(--surface-hi); color: var(--text-mute); }
+.tag.get { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+.tag.post { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+
+.btn {
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn:hover { background: var(--border); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #ff1a4f; border-color: #ff1a4f; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+input, select, textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input.mono { font-family: var(--mono); font-size: 13px; }
+label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 12px; }
+.field { margin-bottom: 12px; }
+.fields-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+.search-wrap { position: relative; margin-bottom: 20px; }
+#search-input { padding: 12px 16px; font-size: 15px; }
+#suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: none;
+}
+#suggest.show { display: block; }
+#suggest a {
+  display: block;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+#suggest a:last-child { border-bottom: none; }
+#suggest a:hover { background: var(--border); }
+#suggest a .sub { color: var(--text-mute); font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.card {
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.card:hover { transform: translateY(-2px); }
+.card .poster {
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-hi);
+  margin-bottom: 8px;
+  position: relative;
+}
+.card .poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.card .poster .badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.card .title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.card .meta { font-size: 11px; color: var(--text-mute); font-family: var(--mono); }
+
+.section { margin-bottom: 32px; }
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  letter-spacing: -0.2px;
+}
+.section-title .count { color: var(--text-mute); font-size: 12px; font-weight: 400; }
+.row-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.row-scroll .card { flex-shrink: 0; width: 150px; }
+
+.player-wrap {
+  margin-top: 16px;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-wrap video { width: 100%; height: 100%; display: block; }
+
+pre.json {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 600px;
+  white-space: pre;
+  color: var(--text-dim);
+}
+pre.json .k { color: #7dd3fc; }
+pre.json .s { color: #86efac; }
+pre.json .n { color: #fbbf24; }
+pre.json .b { color: #f472b6; }
+
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+.toast {
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  animation: toast-in 0.2s ease-out;
+  max-width: 400px;
+}
+.toast.ok { border-left-color: var(--success); }
+.toast.err { border-left-color: var(--error); }
+@keyframes toast-in {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.loading, .empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { padding: 12px 16px; border-bottom: none; border-right: 1px solid var(--border); }
+  nav { padding: 8px; display: flex; gap: 4px; overflow-x: auto; flex: 1; }
+  nav a { white-space: nowrap; padding: 6px 10px; }
+  .sidebar-footer { display: none; }
+  main { padding: 16px; height: auto; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand"><span class="dot" id="health-dot"></span> MovieBox API</div>
+  <nav>
+    <a data-view="health" class="active">Health</a>
+    <a data-view="providers">Providers</a>
+    <a data-view="home">Home</a>
+    <a data-view="search">Search</a>
+    <a data-view="browse">Browse</a>
+    <a data-view="stream">Stream</a>
+    <a data-view="debug">Debug</a>
+    <a data-view="api">API</a>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="/docs" target="_blank">Swagger UI →</a>
+    <a href="/openapi.json" target="_blank">OpenAPI spec →</a>
+  </div>
+</aside>
+
+<main id="view"></main>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+'use strict';
+
+const $ = (sel) => document.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function toast(msg, kind = '') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + kind;
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!r.ok) {
+    const msg = (data && data.detail) || `${r.status} ${r.statusText}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function jsonView(obj) {
+  const pretty = JSON.stringify(obj, null, 2);
+  const html = esc(pretty)
+    .replace(/&quot;([^&]*?)&quot;(\s*:)/g, '&quot;<span class="k">$1</span>&quot;$2')
+    .replace(/:\s*&quot;([^&]*?)&quot;/g, ': &quot;<span class="s">$1</span>&quot;')
+    .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="n">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span class="b">$1</span>');
+  return `<pre class="json">${html}</pre>`;
+}
+
+const S = {
+  view: 'health',
+  subject: null,
+  detail: null,
+  sectionName: null,
+  q: '',
+};
+
+document.querySelectorAll('nav a[data-view]').forEach(a => {
+  a.addEventListener('click', () => {
+    document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+    S.view = a.dataset.view;
+    render();
+  });
+});
+
+function render() {
+  const v = $('#view');
+  switch (S.view) {
+    case 'health':    return renderHealth(v);
+    case 'providers': return renderProviders(v);
+    case 'home':      return renderHome(v);
+    case 'search':    return renderSearch(v);
+    case 'browse':    return renderBrowse(v);
+    case 'stream':    return renderStream(v);
+    case 'debug':     return renderDebug(v);
+    case 'api':       return renderApi(v);
+    default:          v.innerHTML = '<div class="empty">Unknown view</div>';
+  }
+}
+
+async function renderHealth(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h1>Health</h1>
+        <div class="sub">Live status · refreshes every 5s</div>
+      </div>
+      <button class="btn" onclick="refreshHealth()">↻ Refresh</button>
+    </div>
+    <div id="health-body"><div class="loading">Loading…</div></div>
+  `;
+  await refreshHealth();
+  startHealthPoll();
+}
+
+let healthTimer = null;
+function startHealthPoll() {
+  if (healthTimer) clearInterval(healthTimer);
+  healthTimer = setInterval(() => {
+    if (S.view !== 'health') { clearInterval(healthTimer); healthTimer = null; return; }
+    refreshHealth(true);
+  }, 5000);
+}
+
+async function refreshHealth(quiet = false) {
+  try {
+    const d = await api('/health');
+    setHealthDot(d.status === 'ok');
+    if (S.view !== 'health') return;
+    if (!quiet) $('#health-body').innerHTML = '<div class="loading">Loading…</div>';
+    const healthy = Object.values(d.providers || {}).filter(p => p.alive).length;
+    const total = Object.keys(d.providers || {}).length;
+    const rows = Object.entries(d.providers || {}).map(([host, p]) => `
+      <tr>
+        <td><span class="tag ${p.alive ? 'ok' : 'err'}">${p.alive ? 'alive' : 'dead'}</span></td>
+        <td>${esc(host)}</td>
+        <td>${p.latency_ms}ms</td>
+        <td>${p.fails}</td>
+        <td>${p.circuit_open ? '<span class="tag warn">open</span>' : '<span class="tag dim">closed</span>'}</td>
+      </tr>
+    `).join('');
+    $('#health-body').innerHTML = `
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Status</div>
+          <div class="stat-value ${d.status === 'ok' ? 'ok' : 'err'}">${esc(d.status)}</div>
+          <div class="stat-sub">version ${esc(d.version)}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Providers</div>
+          <div class="stat-value">${healthy}/${total}</div>
+          <div class="stat-sub">healthy</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Tokens cached</div>
+          <div class="stat-value">${d.tokens_cached}</div>
+          <div class="stat-sub">bearer tokens</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Player domain</div>
+          <div class="stat-value mono">${esc(d.domain_cached || '—')}</div>
+          <div class="stat-sub">${d.domain_expires_in ? 'expires in ' + d.domain_expires_in + 's' : 'not cached'}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Stream cache</div>
+          <div class="stat-value">${d.stream_cache_size}</div>
+          <div class="stat-sub">30s TTL</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Home cache</div>
+          <div class="stat-value">${d.home_cache_size}</div>
+          <div class="stat-sub">5m TTL</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Providers</div>
+        <table>
+          <thead><tr><th>State</th><th>Host</th><th>Latency</th><th>Fails</th><th>Circuit</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (e) {
+    setHealthDot(false);
+    if (S.view === 'health') $('#health-body').innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+function setHealthDot(ok) {
+  const dot = $('#health-dot');
+  if (!dot) return;
+  dot.className = 'dot ' + (ok ? 'ok' : 'err');
+}
+
+async function renderProviders(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h1>Providers</h1>
+        <div class="sub">Circuit breaker state and per-host stats</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="probeProviders()">Probe all</button>
+      <button class="btn" onclick="resetProviders()">Reset circuit breakers</button>
+      <button class="btn" onclick="renderProviders(document.getElementById('view'))">↻ Refresh</button>
+    </div>
+    <div id="providers-body"><div class="loading">Loading…</div></div>
+  `;
+  try {
+    const d = await api('/providers');
+    const rows = d.providers.map(p => {
+      let state = 'ok';
+      if (p.circuit_open) state = 'warn';
+      else if (!p.alive) state = 'err';
+      return `
+        <tr>
+          <td><span class="tag ${state}">${state === 'ok' ? 'healthy' : state === 'warn' ? 'open' : 'dead'}</span></td>
+          <td>${esc(p.host)}</td>
+          <td>${p.avg_latency_ms}ms</td>
+          <td>${p.consecutive_failures}</td>
+          <td>${p.total_success} / ${p.total_failure}</td>
+          <td>${p.circuit_open ? p.circuit_open_for + 's' : '—'}</td>
+          <td style="color:var(--error);font-size:11px">${esc(p.last_error || '')}</td>
+        </tr>
+      `;
+    }).join('');
+    $('#providers-body').innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Healthy</div><div class="stat-value ok">${d.healthy}</div></div>
+        <div class="stat"><div class="stat-label">Degraded</div><div class="stat-value ${d.degraded > 0 ? 'err' : ''}">${d.degraded}</div></div>
+        <div class="stat"><div class="stat-label">Total</div><div class="stat-value">${d.provider_count}</div></div>
+      </div>
+      <div class="panel">
+        <table>
+          <thead><tr><th>State</th><th>Host</th><th>Latency</th><th>Fails</th><th>Ok/Fail</th><th>Cooldown</th><th>Last error</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (e) {
+    $('#providers-body').innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+async function probeProviders() {
+  toast('Probing all providers…');
+  try {
+    const d = await api('/providers/probe', { method: 'POST' });
+    const alive = d.results.filter(x => x.alive).length;
+    toast(`${alive}/${d.results.length} alive`, 'ok');
+    renderProviders($('#view'));
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function resetProviders() {
+  toast('Resetting circuit breakers…');
+  try {
+    await api('/providers/reset', { method: 'POST' });
+    toast('Circuit breakers reset', 'ok');
+    renderProviders($('#view'));
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function posterCard(item) {
+  const meta = [item.rating && `★ ${item.rating}`, item.year].filter(Boolean).join(' · ');
+  return `
+    <div class="card" onclick='pickSubject(${JSON.stringify({
+      slug: item.slug,
+      sid: item.subject_id,
+      name: item.name,
+      poster_url: item.poster_url,
+    }).replace(/'/g, '&#39;')})'>
+      <div class="poster">
+        ${item.poster_url
+          ? `<img src="${esc(item.poster_url)}" loading="lazy" alt="">`
+          : `<div class="empty" style="padding:20px">?</div>`}
+        ${item.badge ? `<div class="badge">${esc(item.badge)}</div>` : ''}
+      </div>
+      <div class="title">${esc(item.name || '?')}</div>
+      ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
+    </div>
+  `;
+}
+
+async function pickSubject(subject) {
+  S.subject = { ...subject, autoSe: 0, autoEp: 0 };
+  S.detail = null;
+
+  if (subject.slug) {
+    try {
+      const d = await api('/detail/' + encodeURIComponent(subject.slug));
+      S.detail = d;
+      const inner = d.data || {};
+      const st = (inner.subject || {}).subjectType;
+      const resource = inner.resource || {};
+      const seasons = (
+        resource.seasons
+        || resource.seasonList
+        || (resource.data || {}).seasons
+      ) || [];
+
+      if (st === 2 || st === 7) {
+        const firstSeason = seasons.find(s => (s.se || s.episodes) || s.maxEp);
+        if (firstSeason) {
+          S.subject.autoSe = firstSeason.se || 1;
+          const eps = firstSeason.episodes || [];
+          S.subject.autoEp = eps.length && eps[0].ep ? eps[0].ep : 1;
+        } else {
+          S.subject.autoSe = 1;
+          S.subject.autoEp = 1;
+        }
+      }
+    } catch (_) {}
+  }
+
+  document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
+  document.querySelector('nav a[data-view="stream"]').classList.add('active');
+  S.view = 'stream';
+  render();
+}
+
+async function renderHome(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Home</h1><div class="sub">Upstream feed, live</div></div>
+      <button class="btn" onclick="renderHome(document.getElementById('view'))">↻ Refresh</button>
+    </div>
+    <div id="home-body"><div class="loading">Loading…</div></div>
+  `;
+  try {
+    const d = await api('/home');
+    const secs = d.sections.filter(s => s.items && s.items.length);
+    $('#home-body').innerHTML = secs.map(s => `
+      <div class="section">
+        <div class="section-title">${esc(s.section)} <span class="count">${s.count} items</span></div>
+        <div class="row-scroll">${s.items.map(posterCard).join('')}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('#home-body').innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+function renderSearch(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Search</h1><div class="sub">Type to suggest, Enter to search</div></div>
+    </div>
+    <div class="search-wrap">
+      <input id="search-input" class="mono" placeholder="matrix, breaking bad, one piece…" value="${esc(S.q)}" autocomplete="off">
+      <div id="suggest"></div>
+    </div>
+    <div id="search-body"></div>
+  `;
+  const input = $('#search-input');
+  const suggest = $('#suggest');
+  let timer = null;
+
+  input.addEventListener('input', e => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    S.q = q;
+    if (q.length < 2) { suggest.classList.remove('show'); return; }
+    timer = setTimeout(async () => {
+      try {
+        const d = await api('/search/suggest?enrich=true&q=' + encodeURIComponent(q));
+        if (!d.suggestions || !d.suggestions.length) {
+          suggest.classList.remove('show');
+          return;
+        }
+        suggest.innerHTML = d.suggestions.map(s =>
+          s.slug
+            ? `<a data-slug="${esc(s.slug)}" data-title="${esc(s.title)}">${esc(s.title)}<span class="sub">${esc(s.slug)}</span></a>`
+            : `<a data-title="${esc(s.title)}" style="color:var(--text-mute)">${esc(s.title)}<span class="sub">no match</span></a>`
+        ).join('');
+        suggest.classList.add('show');
+        suggest.querySelectorAll('a').forEach(a => {
+          a.onclick = () => {
+            if (a.dataset.slug) {
+              pickSubject({
+                slug: a.dataset.slug,
+                sid: null,
+                name: a.dataset.title,
+                poster_url: null,
+              });
+            } else {
+              input.value = a.dataset.title;
+              doSearch(a.dataset.title);
+            }
+            suggest.classList.remove('show');
+          };
+        });
+      } catch (_) { suggest.classList.remove('show'); }
+    }, 250);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      suggest.classList.remove('show');
+      doSearch(e.target.value.trim());
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) suggest.classList.remove('show');
+  }, { once: false });
+
+  if (S.q) doSearch(S.q);
+}
+
+async function doSearch(q) {
+  if (!q || q.length < 1) return;
+  const body = $('#search-body');
+  if (!body) return;
+  body.innerHTML = '<div class="loading">Searching…</div>';
+  try {
+    const d = await api('/search?q=' + encodeURIComponent(q));
+    if (!d.items || !d.items.length) {
+      body.innerHTML = '<div class="empty">No results</div>';
+      return;
+    }
+    body.innerHTML = `
+      <div class="panel-title">${d.total} results for “${esc(q)}”</div>
+      <div class="grid">${d.items.map(posterCard).join('')}</div>
+    `;
+  } catch (e) {
+    body.innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+async function renderBrowse(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Browse</h1><div class="sub">Pick a section, or type any name</div></div>
+    </div>
+    <div class="fields-row" style="margin-bottom:16px">
+      <div>
+        <label>Section</label>
+        <input id="browse-section" class="mono" placeholder="Cinema, Bollywood, Trending…" value="${esc(S.sectionName || '')}">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn btn-primary" onclick="doBrowse()">Browse</button>
+      </div>
+    </div>
+    <div id="browse-body"></div>
+  `;
+  if (S.sectionName) doBrowse();
+}
+
+async function doBrowse() {
+  const name = $('#browse-section').value.trim();
+  if (!name) return;
+  S.sectionName = name;
+  const body = $('#browse-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const d = await api('/browse/' + encodeURIComponent(name));
+    if (!d.items || !d.items.length) {
+      body.innerHTML = '<div class="empty">No items in this section</div>';
+      return;
+    }
+    body.innerHTML = `
+      <div class="panel-title">${esc(d.section)} · ${d.total} items</div>
+      <div class="grid">${d.items.map(posterCard).join('')}</div>
+    `;
+  } catch (e) {
+    body.innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+function renderStream(el) {
+  const s = S.subject || {};
+  el.innerHTML = `
+    <div class="view-header">
+      <div>
+        <h1>Stream</h1>
+        <div class="sub">${s.name ? 'Playing: ' + esc(s.name) : 'Enter subject details'}</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="fields-row">
+        <div class="field">
+          <label>Subject ID</label>
+          <input id="stream-sid" class="mono" value="${esc(s.sid || '')}" placeholder="9035065306426868432">
+        </div>
+        <div class="field">
+          <label>Detail path (slug)</label>
+          <input id="stream-slug" class="mono" value="${esc(s.slug || '')}" placeholder="the-matrix-reloaded-hindi-63q55q5HqLa">
+        </div>
+        <div class="field">
+          <label>Season</label>
+          <input id="stream-se" class="mono" type="number" value="${esc(s.autoSe ?? 0)}">
+        </div>
+        <div class="field">
+          <label>Episode</label>
+          <input id="stream-ep" class="mono" type="number" value="${esc(s.autoEp ?? 0)}">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="fetchStream()">Fetch sources</button>
+    </div>
+    <div id="stream-body"></div>
+  `;
+
+  if (s.sid && s.slug) fetchStream();
+}
+
+async function fetchStream() {
+  const sid = $('#stream-sid').value.trim();
+  const slug = $('#stream-slug').value.trim();
+  const se = $('#stream-se').value.trim() || '0';
+  const ep = $('#stream-ep').value.trim() || '0';
+  if (!sid || !slug) { toast('subject_id and detail_path required', 'err'); return; }
+
+  const body = $('#stream-body');
+  body.innerHTML = '<div class="loading">Resolving…</div>';
+
+  try {
+    const [stream, captions] = await Promise.all([
+      api(`/api/stream/${encodeURIComponent(sid)}?detail_path=${encodeURIComponent(slug)}&se=${se}&ep=${ep}`),
+      api(`/api/stream/${encodeURIComponent(sid)}/captions?detail_path=${encodeURIComponent(slug)}&se=${se}&ep=${ep}`).catch(() => ({ captions: [] })),
+    ]);
+
+    if (!stream.has_resource) {
+      const resource = (S.detail && S.detail.data || {}).resource || {};
+      const seasons = resource.seasons || resource.seasonList || (resource.data || {}).seasons || [];
+
+      if (seasons.length) {
+        const buttons = [];
+        for (const season of seasons.slice(0, 3)) {
+          const seasonSe = season.se || 1;
+          const eps = season.episodes || [];
+          if (eps.length) {
+            for (const e of eps.slice(0, 20)) {
+              const epNum = e.ep || e.episode || e.epNum;
+              if (!epNum) continue;
+              buttons.push(`<button class="btn" data-se="${seasonSe}" data-ep="${epNum}" onclick="pickEpisode(${seasonSe}, ${epNum})">S${seasonSe}E${epNum}</button>`);
+            }
+          } else if (season.maxEp) {
+            for (let i = 1; i <= Math.min(season.maxEp, 20); i++) {
+              buttons.push(`<button class="btn" data-se="${seasonSe}" data-ep="${i}" onclick="pickEpisode(${seasonSe}, ${i})">S${seasonSe}E${i}</button>`);
+            }
+          }
+        }
+        if (buttons.length) {
+          body.innerHTML = `
+            <div class="panel">
+              <div class="panel-title">Pick an episode</div>
+              <div style="color:var(--text-mute);font-size:12px;margin-bottom:12px">${esc(stream.note || 'No resource at requested S/E')}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">${buttons.join('')}</div>
+            </div>
+          `;
+          return;
+        }
+      }
+
+      body.innerHTML = `<div class="panel"><div style="color:var(--error)">No resource. ${esc(stream.note || '')}</div></div>`;
+      return;
+    }
+
+    if (stream.fell_back_to_movie || stream.se !== parseInt(se) || stream.ep !== parseInt(ep)) {
+      $('#stream-se').value = stream.se;
+      $('#stream-ep').value = stream.ep;
+    }
+
+    const sourcesHtml = stream.sources.map((s, i) => `
+      <tr>
+        <td>${esc(s.resolution || '?')}</td>
+        <td>${esc(s.format || '?')}</td>
+        <td>${s.size ? Math.round(parseInt(s.size) / 1048576) + ' MB' : '—'}</td>
+        <td>${s.duration ? Math.round(s.duration / 60) + ' min' : '—'}</td>
+        <td>${esc(s.codec || '—')}</td>
+        <td><button class="btn" onclick="playSource('${esc(sid)}', '${esc(slug)}', ${stream.se}, ${stream.ep}, '${esc(s.resolution)}')">▶ Play</button></td>
+      </tr>
+    `).join('');
+
+    const captionsHtml = captions.captions && captions.captions.length
+      ? `<div class="panel">
+           <div class="panel-title">Captions (${captions.captions.length})</div>
+           <table>
+             <thead><tr><th>Language</th><th>Code</th><th>Action</th></tr></thead>
+             <tbody>${captions.captions.map(c => `
+               <tr>
+                 <td>${esc(c.lanName || c.lan)}</td>
+                 <td>${esc(c.lan)}</td>
+                 <td><a class="btn" href="/api/stream/${esc(sid)}/subtitles/${esc(c.lan)}?detail_path=${encodeURIComponent(slug)}&se=${stream.se}&ep=${stream.ep}" target="_blank" style="text-decoration:none;display:inline-block">VTT →</a></td>
+               </tr>
+             `).join('')}</tbody>
+           </table>
+         </div>`
+      : '<div class="panel"><div class="panel-title">Captions</div><div style="color:var(--text-mute)">None available</div></div>';
+
+    body.innerHTML = `
+      <div class="panel">
+        <div class="panel-title">Sources (${stream.sources.length})</div>
+        <table>
+          <thead><tr><th>Resolution</th><th>Format</th><th>Size</th><th>Duration</th><th>Codec</th><th></th></tr></thead>
+          <tbody>${sourcesHtml}</tbody>
+        </table>
+      </div>
+      ${captionsHtml}
+      <div id="player-slot"></div>
+    `;
+
+    if (stream.sources.length) {
+      const best = stream.sources[0].resolution || 'best';
+      playSource(sid, slug, stream.se, stream.ep, best);
+    }
+  } catch (e) {
+    body.innerHTML = `<div class="panel"><div style="color:var(--error)">${esc(e.message)}</div></div>`;
+  }
+}
+
+function pickEpisode(se, ep) {
+  const seInput = $('#stream-se');
+  const epInput = $('#stream-ep');
+  if (seInput) seInput.value = se;
+  if (epInput) epInput.value = ep;
+  fetchStream();
+}
+
+function playSource(sid, slug, se, ep, res) {
+  const slot = $('#player-slot');
+  if (!slot) return;
+  const url = `/api/stream/${encodeURIComponent(sid)}/proxy?detail_path=${encodeURIComponent(slug)}&se=${se}&ep=${ep}&res=${encodeURIComponent(res)}`;
+  slot.innerHTML = `
+    <div class="panel" style="padding:0;background:#000;border:none">
+      <div class="player-wrap" style="margin-top:0">
+        <video controls autoplay src="${esc(url)}"></video>
+      </div>
+    </div>
+  `;
+}
+
+function renderDebug(el) {
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Debug</h1><div class="sub">Introspection endpoints</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="debugRun('/debug/tokens')">Show cached tokens</button>
+      <button class="btn" onclick="debugRun('/debug/fetch-token', 'POST')">Force token harvest</button>
+      <button class="btn" onclick="debugRun('/api/tabs?min_id=2&max_id=5&per_page=1')">Probe tabs 2-5</button>
+      <button class="btn" onclick="debugRun('/api/tabs/variants?tab_id=2')">Tab payload variants</button>
+      <button class="btn" onclick="debugRun('/api/debug/upstream?path=/home&method=GET')">Raw /home via upstream</button>
+    </div>
+    <div id="debug-body"><div class="empty">Click a button above</div></div>
+  `;
+}
+
+async function debugRun(path, method = 'GET') {
+  const body = $('#debug-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const d = await api(path, { method });
+    body.innerHTML = jsonView(d);
+  } catch (e) {
+    body.innerHTML = `<div class="empty" style="color:var(--error)">${esc(e.message)}</div>`;
+  }
+}
+
+function renderApi(el) {
+  const groups = [
+    {
+      title: 'Home & Browse',
+      endpoints: [
+        ['GET', '/home', 'Operating list with banners, subjects, live matches'],
+        ['GET', '/home/all', 'Flat deduped list of every item on home'],
+        ['GET', '/sections', 'Section names, types, counts'],
+        ['GET', '/browse/{section}', 'Paginated items in a named section'],
+        ['GET', '/movies', 'Tab filter fallback for movies'],
+        ['GET', '/tv-series', 'Tab filter fallback for TV'],
+        ['GET', '/animation', 'Tab filter fallback for anime'],
+      ],
+    },
+    {
+      title: 'Search & Detail',
+      endpoints: [
+        ['GET', '/search?q=', 'Full-text search against upstream'],
+        ['GET', '/search/suggest?q=&enrich=', 'Typeahead; enrich adds slug'],
+        ['GET', '/detail/{slug}', 'Raw upstream detail passthrough'],
+      ],
+    },
+    {
+      title: 'Stream',
+      endpoints: [
+        ['GET', '/api/stream/{sid}?detail_path=&se=&ep=', 'Sources + HLS/DASH manifests'],
+        ['GET', '/api/stream/{sid}/captions?detail_path=&se=&ep=', 'Subtitle track list'],
+        ['GET', '/api/stream/{sid}/proxy?detail_path=&se=&ep=&res=', 'Range-aware MP4 passthrough'],
+        ['GET', '/api/stream/{sid}/subtitles/{lang}?detail_path=&se=&ep=', 'SRT → WebVTT'],
+      ],
+    },
+    {
+      title: 'Ops',
+      endpoints: [
+        ['GET', '/health', 'Liveness + caches + provider snapshot'],
+        ['GET', '/providers', 'Per-host circuit breaker state'],
+        ['POST', '/providers/probe', 'Fan-out health check'],
+        ['POST', '/providers/reset', 'Clear circuit breakers'],
+        ['GET', '/api/hosts', 'Legacy host list'],
+        ['GET', '/api/tabs?min_id=&max_id=', 'Probe tab IDs'],
+        ['GET', '/api/tabs/variants?tab_id=', 'Test all payload shapes for a tab'],
+        ['GET', '/api/debug/upstream?path=&method=', 'Signed passthrough to upstream'],
+      ],
+    },
+    {
+      title: 'Debug',
+      endpoints: [
+        ['GET', '/debug/tokens', 'Show cached bearer tokens'],
+        ['POST', '/debug/fetch-token', 'Force a fresh harvest'],
+        ['POST', '/debug/play?subject_id=&detail_path=', 'Direct /subject/play call'],
+      ],
+    },
+    {
+      title: 'Auto (FastAPI)',
+      endpoints: [
+        ['GET', '/docs', 'Swagger UI'],
+        ['GET', '/redoc', 'ReDoc'],
+        ['GET', '/openapi.json', 'Machine-readable spec'],
+      ],
+    },
+  ];
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>API</h1><div class="sub">Every route, grouped</div></div>
+    </div>
+    ${groups.map(g => `
+      <div class="panel">
+        <div class="panel-title">${esc(g.title)}</div>
+        <table>
+          <tbody>${g.endpoints.map(([m, p, desc]) => `
+            <tr>
+              <td style="width:60px"><span class="tag ${m.toLowerCase()}">${m}</span></td>
+              <td style="color:var(--text);font-weight:600">${esc(p)}</td>
+              <td style="color:var(--text-mute);font-family:inherit">${esc(desc)}</td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      </div>
+    `).join('')}
+  `;
+}
+
+refreshHealth(true);
+render();
+</script>
+</body>
+</html>

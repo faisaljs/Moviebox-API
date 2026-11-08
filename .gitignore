@@ -17,4 +17,4 @@ env/
 catalog.db
 catalog.db-wal
 catalog.db-shm
-catalog.db.backup-*
+catalog.db.backup-**.pyc

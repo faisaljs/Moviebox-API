@@ -1,15 +1,8 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 from fastapi import APIRouter
-from . import user, providers, home, catalog, search, stream, diagnostics
+from . import providers, home, catalog, search, stream, diagnostics
 
 router = APIRouter()
 for _r in (
-    user.router,
     providers.router,
     home.router,
     catalog.router,

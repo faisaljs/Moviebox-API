@@ -9,7 +9,6 @@ INSTALL_DIR="$DATA_HOME/moviebox"
 SOURCE_DIR="$INSTALL_DIR/source"
 NEXT_DIR="$INSTALL_DIR/source.next.$$"
 BACKUP_DIR="$INSTALL_DIR/source.backup.$$"
-BIN_DIR="$HOME/.local/bin"
 TMP_DIR=""
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -62,13 +61,18 @@ for tool in curl tar python3; do
   fi
 done
 
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)'; then
+  echo "Python 3.10+ is required (union syntax in type hints)." >&2
+  exit 1
+fi
+
 TMP_DIR="$(mktemp -d)"
 trap cleanup EXIT HUP INT TERM
 
-printf '\n%sMovieBox%s %sInstaller%s\n\n' "$PINK" "$RESET" "$DIM" "$RESET"
+printf '\n%sMovieBox API%s %sInstaller%s\n\n' "$PINK" "$RESET" "$DIM" "$RESET"
 step "Downloading source ($REF)"
 curl -fsSL "https://codeload.github.com/$REPOSITORY/tar.gz/$REF_PATH" -o "$TMP_DIR/source.tar.gz"
-mkdir -p "$TMP_DIR/source" "$NEXT_DIR" "$INSTALL_DIR" "$BIN_DIR"
+mkdir -p "$TMP_DIR/source" "$NEXT_DIR" "$INSTALL_DIR"
 tar -xzf "$TMP_DIR/source.tar.gz" --strip-components=1 -C "$NEXT_DIR"
 done_step "Source downloaded"
 
@@ -96,18 +100,9 @@ fi
 rm -rf "$BACKUP_DIR"
 done_step "App files installed"
 
-step "Adding the moviebox command"
-cat > "$BIN_DIR/moviebox" <<'LAUNCHER'
-#!/bin/sh
-set -eu
-DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-exec "$DATA_HOME/moviebox/venv/bin/python" "$DATA_HOME/moviebox/source/cli.py" "$@"
-LAUNCHER
-chmod 755 "$BIN_DIR/moviebox"
-done_step "Command installed"
-
-printf '\n%sMovieBox is ready.%s Run %smoviebox%s to open your local app.\n' "$GREEN" "$RESET" "$PINK" "$RESET"
-case ":${PATH:-}:" in
-  *":$BIN_DIR:"*) ;;
-  *) printf '%sAdd %s to PATH if the command is not found.%s\n' "$DIM" "$BIN_DIR" "$RESET" ;;
-esac
+printf '\n%sMovieBox API is ready.%s\n\n' "$GREEN" "$RESET"
+printf 'Run it with:\n'
+printf '  %s%s/moviebox/venv/bin/python %s/moviebox/source/main.py%s\n\n' \
+  "$DIM" "$DATA_HOME" "$DATA_HOME" "$RESET"
+printf 'Or inside docker:\n'
+printf '  %sdocker compose up%s\n' "$DIM" "$RESET"

@@ -1,11 +1,6 @@
-"""
-MovieBox API Pro — https://github.com/faisaljs/Moviebox-API
-Author: Faisal (https://github.com/faisaljs)
-License: MIT
-"""
-
 import time
 import asyncio
+import httpx
 from config import (
     KNOWN_HOSTS, DEFAULT_HEADERS, API_BASE,
     PROVIDER_PROBE_TIMEOUT, CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_SECONDS,
@@ -90,8 +85,6 @@ def ordered_candidates(preferred: str | None, strict: bool) -> list[str]:
     rest.sort()
     ordered.extend(h for _, h in rest)
 
-    # If every circuit is open, allow only the host whose cooldown ends
-    # first to receive a recovery attempt.
     if not ordered and provider_state:
         first = min(
             provider_state.items(),
@@ -103,14 +96,16 @@ def ordered_candidates(preferred: str | None, strict: bool) -> list[str]:
 
 
 async def probe_provider(host: str) -> dict:
-    client = state.require_client()
     start = time.time()
     try:
-        resp = await client.get(
-            f"{API_BASE}/home?host={host}",
-            headers=DEFAULT_HEADERS,
-            timeout=PROVIDER_PROBE_TIMEOUT,
-        )
+        async with httpx.AsyncClient(timeout=PROVIDER_PROBE_TIMEOUT) as c:
+            resp = await c.get(
+                f"{API_BASE}/home?host={host}",
+                headers={
+                    "User-Agent": DEFAULT_HEADERS["User-Agent"],
+                    "Referer": DEFAULT_HEADERS["Referer"],
+                },
+            )
         elapsed_ms = (time.time() - start) * 1000
         if resp.status_code == 200:
             mark_success(host, elapsed_ms)

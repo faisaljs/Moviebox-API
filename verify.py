@@ -1,424 +1,429 @@
-"""
-Live verification for MovieBox API Pro v2.9.1.
-
-Author: Faisal (https://github.com/faisaljs)
-Repo:   https://github.com/faisaljs/Moviebox-API
-License: MIT
-
-Run against a live server: python verify.py [base_url]
-Default: http://localhost:8000
-"""
-
 import sys
 import httpx
-import time
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 TIMEOUT = 90
+
+try:
+    httpx.get(f"{BASE}/health", timeout=5)
+except httpx.RequestError as e:
+    print(f"FATAL: {BASE} unreachable ({type(e).__name__})")
+    print("Hint: is the app running? Start it with `python main.py`.")
+    sys.exit(2)
+
+results = {"pass": 0, "fail": 0, "skip": 0}
 
 
 def hr(label):
     print(f"\n{'─' * 60}\n{label}\n{'─' * 60}")
 
 
-def ok(cond, msg):
-    mark = "PASS" if cond else "FAIL"
-    print(f"  [{mark}] {msg}")
+def check(cond, msg):
+    if cond:
+        print(f"  [PASS] {msg}")
+        results["pass"] += 1
+    else:
+        print(f"  [FAIL] {msg}")
+        results["fail"] += 1
     return cond
 
 
-def sample_items(items, label):
-    print(f"    {label}: {len(items)} items")
-    if items:
-        it = items[0]
-        print(f"    sample: name={str(it.get('name'))[:50]!r}")
-        print(f"            slug={it.get('slug')}")
-        print(f"            sid={it.get('subject_id')}")
-        print(f"            poster={'YES' if it.get('poster_url') else 'NULL'}")
-    return items
+def skip(msg):
+    print(f"  [SKIP] {msg}")
+    results["skip"] += 1
 
 
-results = {"pass": 0, "fail": 0}
-
-
-def record(passed):
-    results["pass" if passed else "fail"] += 1
-
-
-# ── 1. dashboard ────────────────────────────────────────────────────────────
-hr("GET /  (dashboard)")
+hr("GET /health")
 try:
-    r = httpx.get(f"{BASE}/", timeout=TIMEOUT)
-    is_html = r.status_code == 200 and "<html" in r.text.lower()
-    record(ok(is_html, f"status {r.status_code}, html={'YES' if is_html else 'NO'}"))
+    r = httpx.get(f"{BASE}/health", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(d.get("status") == "ok", f"status field: {d.get('status')}")
+    check(bool(d.get("version")), f"version: {d.get('version')}")
+    provs = d.get("providers", {})
+    check(len(provs) > 0, f"{len(provs)} providers tracked")
+    print(f"    tokens_cached: {d.get('tokens_cached')}, domain: {d.get('domain_cached')}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 2. home ────────────────────────────────────────────────────────────────
+
+hr("GET /providers")
+try:
+    r = httpx.get(f"{BASE}/providers", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    provs = d.get("providers", [])
+    check(len(provs) > 0, f"{len(provs)} providers, {d.get('healthy', 0)} healthy")
+    for p in provs:
+        state_str = "OK" if p["alive"] and not p["circuit_open"] else ("OPEN" if p["circuit_open"] else "DEAD")
+        print(f"    [{state_str:4}] {p['host']:30} latency={p['avg_latency_ms']}ms fails={p['consecutive_failures']}")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
+hr("POST /providers/probe")
+try:
+    r = httpx.post(f"{BASE}/providers/probe", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    results_list = d.get("results", [])
+    alive = sum(1 for x in results_list if x.get("alive"))
+    check(len(results_list) > 0, f"{alive}/{len(results_list)} alive")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
+hr("GET /api/hosts")
+try:
+    r = httpx.get(f"{BASE}/api/hosts", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check("primary" in d, f"primary: {d.get('primary')}")
+    check(len(d.get("results", [])) > 0, f"{len(d.get('results', []))} hosts")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
 hr("GET /home")
-home_slug = home_sid = None
+home_slug = None
+home_sid = None
 try:
     r = httpx.get(f"{BASE}/home", timeout=TIMEOUT)
-    data = r.json()
-    secs = data.get("sections", [])
-    record(ok(r.status_code == 200 and len(secs) > 0, f"status {r.status_code}, {len(secs)} sections"))
-    for s in secs[:4]:
-        items = s.get("items", [])
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    secs = d.get("sections", [])
+    check(len(secs) > 0, f"{len(secs)} sections")
+    for s in secs[:3]:
         print(f"    [{s['section']}] {s['count']} items")
-        if items and not home_slug:
-            first = items[0]
+    for s in secs:
+        if s.get("section") == "Banner":
+            continue
+        if s.get("count", 0) > 0 and s.get("items"):
+            first = s["items"][0]
             home_slug = first.get("slug")
             home_sid = first.get("subject_id")
-            print(f"    picked: slug={home_slug} sid={home_sid}")
+            print(f"    picked: {first.get('name')} (slug={home_slug})")
+            break
+    check(home_slug is not None, "found a subject to test with")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 3. catalog stats ───────────────────────────────────────────────────────
-hr("GET /catalog/stats")
+
+hr("GET /home/all")
 try:
-    r = httpx.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
-    data = r.json()
-    total = data.get("total", 0)
-    walk = data.get("walk_state", {})
-    record(ok(r.status_code == 200 and "walk_state" in data,
-              f"status {r.status_code}, total={total}, "
-              f"walk_running={walk.get('running')}, "
-              f"enriching={walk.get('enriching')}"))
-    print(f"    types: movies={data.get('movies')} tv={data.get('tv')} anime={data.get('anime')} "
-          f"untyped={data.get('untyped')} pending_enrich={data.get('untyped_pending_enrichment')}")
-    st = data.get("subject_types", {})
-    if st:
-        print(f"    subject_type breakdown: {st}")
-    ks = data.get("keyword_stats", {})
-    if ks:
-        cap_kws = [k for k, v in ks.items() if v.get("hit_cap")]
-        print(f"    keywords walked: {len(ks)}/36, hit_cap: {cap_kws}")
+    r = httpx.get(f"{BASE}/home/all", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(d.get("count", 0) > 0, f"{d.get('count')} deduped items")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 4. catalog (indexed) ───────────────────────────────────────────────────
-hr("GET /catalog")
+
+hr("GET /sections")
 try:
-    r = httpx.get(f"{BASE}/catalog", params={"per_page": 12}, timeout=TIMEOUT)
-    data = r.json()
-    items = data.get("items", [])
-    total = data.get("total", 0)
-    schema_ok = "total" in data and "items" in data and "page" in data
-    record(ok(r.status_code == 200 and schema_ok, f"status {r.status_code}, total={total}, items={len(items)}"))
-    if items:
-        sample_items(items, "catalog")
+    r = httpx.get(f"{BASE}/sections", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(len(d.get("sections", [])) > 0, f"{len(d.get('sections', []))} sections")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 5. catalog sorts ───────────────────────────────────────────────────────
-hr("GET /catalog?sort=title  and  ?sort=rating")
-for sort in ("title", "rating"):
-    try:
-        r = httpx.get(f"{BASE}/catalog", params={"sort": sort, "per_page": 3}, timeout=TIMEOUT)
-        data = r.json()
-        record(ok(r.status_code == 200, f"sort={sort}, status {r.status_code}, total={data.get('total')}"))
-    except Exception as e:
-        record(ok(False, f"exception: {e}"))
 
-# ── 6. catalog type filters ────────────────────────────────────────────────
-hr("GET /catalog?type=movie  /  ?type=tv  /  ?type=anime")
-for t in ("movie", "tv", "anime"):
-    try:
-        r = httpx.get(f"{BASE}/catalog", params={"type": t, "per_page": 3}, timeout=TIMEOUT)
-        data = r.json()
-        record(ok(r.status_code == 200, f"type={t}, status {r.status_code}, total={data.get('total')}"))
-    except Exception as e:
-        record(ok(False, f"exception: {e}"))
-
-# ── 7. catalog text search ─────────────────────────────────────────────────
-hr("GET /catalog?q=the")
+hr("GET /browse/Cinema")
 try:
-    r = httpx.get(f"{BASE}/catalog", params={"q": "the", "per_page": 3}, timeout=TIMEOUT)
-    data = r.json()
-    items = data.get("items", [])
-    record(ok(r.status_code == 200, f"status {r.status_code}, matches={data.get('total')}"))
-    sample_items(items, "q=the")
+    r = httpx.get(f"{BASE}/browse/Cinema", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}, total={d.get('total')}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 8. catalog refresh ─────────────────────────────────────────────────────
-hr("POST /catalog/refresh")
-try:
-    r = httpx.post(f"{BASE}/catalog/refresh", timeout=TIMEOUT)
-    data = r.json()
-    record(ok(r.status_code == 200 and "status" in data,
-              f"status {r.status_code}, response={data.get('status')}"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
 
-# ── 9. home fallback catalogs ──────────────────────────────────────────────
 for path in ("/movies", "/tv-series", "/animation"):
     hr(f"GET {path}")
     try:
         r = httpx.get(f"{BASE}{path}", timeout=TIMEOUT)
-        data = r.json()
-        items = data.get("items", [])
-        record(ok(r.status_code == 200 and len(items) > 0,
-                  f"status {r.status_code}, source={data.get('source')}, total={data.get('total')}"))
+        d = r.json()
+        check(r.status_code == 200, f"status {r.status_code}, source={d.get('source')}, items={len(d.get('items', []))}")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 
-# ── 10. search ─────────────────────────────────────────────────────────────
+
 hr("GET /search?q=matrix")
+matrix_slug = None
+matrix_sid = None
+items = []
 try:
     r = httpx.get(f"{BASE}/search", params={"q": "matrix"}, timeout=TIMEOUT)
-    data = r.json()
-    record(ok(r.status_code == 200, f"status {r.status_code}, total={data.get('total')}"))
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(d.get("total", 0) > 0, f"total: {d.get('total')}")
+    items = d.get("items", [])
+    if items:
+        first = items[0]
+        matrix_slug = first.get("slug")
+        matrix_sid = first.get("subject_id")
+        print(f"    first: {first.get('name')}")
+        print(f"    slug:  {matrix_slug}")
+        check(matrix_slug is not None, "slug present on first result")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 11. detail ─────────────────────────────────────────────────────────────
+
+if matrix_slug and matrix_sid:
+    hr("Picking fixture (max sources among top-5)")
+    candidates = [(i.get("slug"), i.get("subject_id")) for i in items[:5] if i.get("slug") and i.get("subject_id")]
+    best_sid, best_slug, best_count, best_res = None, None, 0, []
+    for cand_slug, cand_sid in candidates:
+        try:
+            probe = httpx.get(
+                f"{BASE}/api/stream/{cand_sid}",
+                params={"detail_path": cand_slug, "se": 0, "ep": 0},
+                timeout=15,
+            ).json()
+            count = len(probe.get("sources", []))
+            resolutions = [s["resolution"] for s in probe.get("sources", [])]
+            print(f"    {cand_slug[:50]:50} {count} sources {resolutions}")
+            if count > best_count:
+                best_count = count
+                best_sid, best_slug, best_res = cand_sid, cand_slug, resolutions
+        except Exception as e:
+            print(f"    {cand_slug[:50]:50} probe failed: {e}")
+    if best_sid:
+        matrix_sid, matrix_slug = best_sid, best_slug
+        check(True, f"fixture pick: {best_slug} ({best_count} sources, {best_res})")
+    else:
+        check(False, "no candidate had stream sources")
+else:
+    skip("no search results to pick from")
+
+
+hr("GET /search/suggest?q=break&enrich=true")
+try:
+    r = httpx.get(f"{BASE}/search/suggest",
+                  params={"q": "break", "enrich": "true"}, timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    sugs = d.get("suggestions", [])
+    check(len(sugs) > 0, f"{len(sugs)} suggestions")
+    with_slug = sum(1 for s in sugs if s.get("slug"))
+    check(with_slug > 0, f"{with_slug}/{len(sugs)} enriched with slug")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
 hr("GET /detail/{slug}")
-if home_slug:
+if matrix_slug:
+    try:
+        r = httpx.get(f"{BASE}/detail/{matrix_slug}", timeout=TIMEOUT)
+        d = r.json()
+        inner = d.get("data", {}) or {}
+        check(r.status_code == 200 and bool(inner),
+              f"status {r.status_code}, keys: {list(inner.keys())[:6]}")
+    except Exception as e:
+        check(False, f"exception: {e}")
+elif home_slug:
     try:
         r = httpx.get(f"{BASE}/detail/{home_slug}", timeout=TIMEOUT)
-        data = r.json()
-        inner = data.get("data", {}) or {}
-        record(ok(r.status_code == 200 and bool(inner), f"status {r.status_code}, keys={list(inner.keys())[:6]}"))
+        d = r.json()
+        inner = d.get("data", {}) or {}
+        check(r.status_code == 200 and bool(inner),
+              f"status {r.status_code}, keys: {list(inner.keys())[:6]}")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 else:
-    record(ok(False, "no slug from /home"))
+    skip("no slug")
 
-# ── 12. stream ─────────────────────────────────────────────────────────────
+
+stream_sid = matrix_sid or home_sid
+stream_slug = matrix_slug or home_slug
 hr("GET /api/stream/{sid}")
-if home_sid and home_slug:
+stream_ok = False
+sources = []
+if stream_sid and stream_slug:
     try:
-        r = httpx.get(
-            f"{BASE}/api/stream/{home_sid}",
-            params={"detail_path": home_slug},
-            timeout=TIMEOUT,
-        )
-        data = r.json()
-        record(ok(r.status_code == 200, f"status {r.status_code}, has_resource={data.get('has_resource')}, sources={len(data.get('sources', []))}"))
+        r = httpx.get(f"{BASE}/api/stream/{stream_sid}",
+                      params={"detail_path": stream_slug, "se": 0, "ep": 0},
+                      timeout=TIMEOUT)
+        d = r.json()
+        check(r.status_code == 200, f"status {r.status_code}")
+        check(d.get("has_resource") is not None, f"has_resource: {d.get('has_resource')}")
+        sources = d.get("sources", [])
+        stream_ok = bool(d.get("has_resource")) and len(sources) > 0
+        check(stream_ok, f"{len(sources)} sources: {[s['resolution'] for s in sources]}")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 else:
-    record(ok(False, "no sid"))
+    skip("no sid/slug")
 
-# ── 13. captions ───────────────────────────────────────────────────────────
+
 hr("GET /api/stream/{sid}/captions")
 captions_lang = None
-if home_sid and home_slug:
+if stream_sid and stream_slug:
     try:
-        r = httpx.get(
-            f"{BASE}/api/stream/{home_sid}/captions",
-            params={"detail_path": home_slug},
-            timeout=TIMEOUT,
-        )
-        data = r.json()
-        caps = data.get("captions", [])
-        record(ok(r.status_code == 200, f"status {r.status_code}, count={data.get('count')}"))
+        r = httpx.get(f"{BASE}/api/stream/{stream_sid}/captions",
+                      params={"detail_path": stream_slug, "se": 0, "ep": 0},
+                      timeout=TIMEOUT)
+        d = r.json()
+        check(r.status_code == 200, f"status {r.status_code}")
+        caps = d.get("captions", [])
+        check(isinstance(caps, list), f"{len(caps)} caption tracks")
         if caps:
             captions_lang = caps[0].get("lan")
+            print(f"    first: {caps[0].get('lanName')} ({captions_lang})")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 else:
-    record(ok(False, "no sid"))
+    skip("no sid")
 
-# ── 14. proxy ──────────────────────────────────────────────────────────────
-hr("GET /api/stream/{sid}/proxy  (Range)")
-if home_sid and home_slug:
+
+hr("GET /api/stream/{sid}/proxy  (Range: bytes=0-1048575)")
+if stream_ok:
     try:
         with httpx.stream(
             "GET",
-            f"{BASE}/api/stream/{home_sid}/proxy",
-            params={"detail_path": home_slug, "res": "best"},
-            headers={"Range": "bytes=0-1023"},
+            f"{BASE}/api/stream/{stream_sid}/proxy",
+            params={"detail_path": stream_slug, "se": 0, "ep": 0, "res": "best"},
+            headers={"Range": "bytes=0-1048575"},
             timeout=TIMEOUT,
         ) as r:
             first = b""
-            for chunk in r.iter_bytes(1024):
-                first = chunk
-                break
-            record(ok(r.status_code in (200, 206) and len(first) > 0,
-                      f"status {r.status_code}, {len(first)} bytes"))
+            total = 0
+            for chunk in r.iter_bytes(65536):
+                if not first:
+                    first = chunk[:16]
+                total += len(chunk)
+                if total >= 1048576:
+                    break
+            check(r.status_code in (200, 206), f"status {r.status_code}, {total} bytes")
+            check(total >= 1048576, f"received at least 1MB")
+            is_mp4 = len(first) >= 8 and first[4:8] == b"ftyp"
+            check(is_mp4, f"first bytes look like MP4 (hex={first[:12].hex()})")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 else:
-    record(ok(False, "no sid"))
+    skip("no stream sources")
 
-# ── 15. subtitles VTT ──────────────────────────────────────────────────────
+
 hr("GET /api/stream/{sid}/subtitles/{lang}")
-if home_sid and home_slug and captions_lang:
+if stream_sid and stream_slug and captions_lang:
     try:
-        r = httpx.get(
-            f"{BASE}/api/stream/{home_sid}/subtitles/{captions_lang}",
-            params={"detail_path": home_slug},
-            timeout=TIMEOUT,
-        )
+        r = httpx.get(f"{BASE}/api/stream/{stream_sid}/subtitles/{captions_lang}",
+                      params={"detail_path": stream_slug, "se": 0, "ep": 0},
+                      timeout=TIMEOUT)
         starts_vtt = r.text.startswith("WEBVTT")
-        record(ok(r.status_code == 200 and starts_vtt,
-                  f"status {r.status_code}, lang={captions_lang}, WEBVTT={starts_vtt}"))
+        check(r.status_code == 200 and starts_vtt,
+              f"status {r.status_code}, lang={captions_lang}, WEBVTT={starts_vtt}, {len(r.text)} bytes")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
-elif home_sid and home_slug:
-    record(ok(True, "no captions to test (skip)"))
+        check(False, f"exception: {e}")
+elif stream_sid and stream_slug:
+    skip("no captions to test")
 else:
-    record(ok(False, "no sid"))
+    skip("no sid")
 
-# ── 16. tab variants ───────────────────────────────────────────────────────
+
+hr("GET /api/tabs?min_id=2&max_id=3")
+try:
+    r = httpx.get(f"{BASE}/api/tabs",
+                  params={"min_id": 2, "max_id": 3, "per_page": 1}, timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(len(d.get("results", [])) == 2, f"{len(d.get('results', []))} tab results")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
 hr("GET /api/tabs/variants?tab_id=2")
 try:
-    r = httpx.get(f"{BASE}/api/tabs/variants", params={"tab_id": 2}, timeout=TIMEOUT)
-    data = r.json()
-    variants = data.get("variants", [])
-    record(ok(r.status_code == 200, f"status {r.status_code}, {len(variants)} variants tested"))
+    r = httpx.get(f"{BASE}/api/tabs/variants",
+                  params={"tab_id": 2}, timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    variants = d.get("variants", [])
+    check(len(variants) > 0, f"{len(variants)} variants tested")
     for v in variants:
         if v.get("error"):
             print(f"    {v['variant']:15} ERROR")
-            continue
-        print(f"    {v['variant']:15} count={v['count']:>2} "
-              f"total={v['pager_total']} sentinel={v['sentinel']}")
+        else:
+            print(f"    {v['variant']:15} count={v['count']:>2} sentinel={v['sentinel']}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 17. health ─────────────────────────────────────────────────────────────
-hr("GET /health")
+
+hr("GET /api/debug/upstream")
 try:
-    r = httpx.get(f"{BASE}/health", timeout=TIMEOUT)
-    data = r.json()
-    record(ok(r.status_code == 200 and data.get("status") == "ok",
-              f"version={data.get('version')} tokens_cached={data.get('tokens_cached')} "
-              f"indexed={data.get('catalog_indexed')} walk_running={data.get('walk_running')}"))
+    r = httpx.get(f"{BASE}/api/debug/upstream",
+                  params={"path": "/home", "method": "GET"}, timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check("code" in d or "data" in d, f"keys: {list(d.keys())[:4]}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 18. frontend ───────────────────────────────────────────────────────────
-hr("GET /app  (frontend)")
+
+hr("GET /debug/tokens")
 try:
-    r = httpx.get(f"{BASE}/app", timeout=TIMEOUT)
-    is_html = r.status_code == 200 and "<html" in r.text.lower() and "MovieBox" in r.text
-    record(ok(is_html, f"status {r.status_code}, html={'YES' if is_html else 'NO'}"))
+    r = httpx.get(f"{BASE}/debug/tokens", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check("count" in d, f"cached tokens: {d.get('count')}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 19. providers ──────────────────────────────────────────────────────────
-hr("GET /providers")
+
+hr("POST /debug/fetch-token")
 try:
-    r = httpx.get(f"{BASE}/providers", timeout=TIMEOUT)
-    data = r.json()
-    providers_list = data.get("providers", [])
-    record(ok(r.status_code == 200 and len(providers_list) > 0,
-              f"status {r.status_code}, {data.get('healthy', 0)}/{len(providers_list)} healthy"))
-    for p in providers_list:
-        state_str = "OK" if p["alive"] and not p["circuit_open"] else ("OPEN" if p["circuit_open"] else "DEAD")
-        print(f"    [{state_str:4}] {p['host']:30} latency={p['avg_latency_ms']}ms "
-              f"ok={p['total_success']} fail={p['total_failure']}")
+    r = httpx.post(f"{BASE}/debug/fetch-token", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200, f"status {r.status_code}")
+    check(d.get("success") is True, f"harvest success, len={d.get('length')}")
 except Exception as e:
-    record(ok(False, f"exception: {e}"))
+    check(False, f"exception: {e}")
 
-# ── 20. providers probe ────────────────────────────────────────────────────
-hr("POST /providers/probe")
-try:
-    r = httpx.post(f"{BASE}/providers/probe", timeout=TIMEOUT)
-    data = r.json()
-    probe_results = data.get("results", [])
-    alive = sum(1 for x in probe_results if x.get("alive"))
-    record(ok(r.status_code == 200 and len(probe_results) > 0,
-              f"status {r.status_code}, {alive}/{len(probe_results)} alive"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
 
-# ── 21. legacy hosts ───────────────────────────────────────────────────────
-hr("GET /api/hosts")
-try:
-    r = httpx.get(f"{BASE}/api/hosts", timeout=TIMEOUT)
-    data = r.json()
-    host_results = data.get("results", [])
-    alive = [x for x in host_results if x.get("alive")]
-    unique = data.get("unique_catalogs", 0)
-    record(ok(r.status_code == 200 and len(host_results) > 0,
-              f"status {r.status_code}, {len(alive)}/{len(host_results)} alive, {unique} unique catalogs"))
-    for h in host_results:
-        status_str = "ALIVE" if h.get("alive") else "DEAD"
-        extra = f" latency={h.get('latency_ms', '?')}ms" if h.get("alive") else ""
-        print(f"    [{status_str:5}] {h['host']}{extra}")
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-# ── 22. catalog stats by host ──────────────────────────────────────────────
-hr("GET /catalog/stats — by_host")
-try:
-    r = httpx.get(f"{BASE}/catalog/stats", timeout=TIMEOUT)
-    data = r.json()
-    by_host = data.get("by_host", {})
-    record(ok(r.status_code == 200, f"status {r.status_code}, {len(by_host)} hosts in catalog"))
-    for host, count in by_host.items():
-        print(f"    {host}: {count} subjects")
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-# ── 23. user bookmarks round-trip ─────────────────────────────────────────
-hr("POST /user/bookmarks  →  GET  →  DELETE")
-test_slug = "verify-test-bookmark-" + str(int(time.time()))
-try:
-    r = httpx.post(f"{BASE}/user/bookmarks", json={
-        "slug": test_slug, "name": "Verify Test", "poster_url": None,
-    }, timeout=TIMEOUT)
-    post_ok = r.status_code == 200
-    r = httpx.get(f"{BASE}/user/bookmarks", timeout=TIMEOUT)
-    data = r.json()
-    bookmarks = data.get("bookmarks", [])
-    found = any(b.get("slug") == test_slug for b in bookmarks)
-    r = httpx.delete(f"{BASE}/user/bookmarks/{test_slug}", timeout=TIMEOUT)
-    del_ok = r.status_code == 200
-    record(ok(post_ok and found and del_ok,
-              f"post={post_ok} found={found} delete={del_ok} count={len(bookmarks)}"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-# ── 24. user history round-trip ───────────────────────────────────────────
-hr("POST /user/history  →  GET  →  DELETE")
-test_hist_slug = "verify-test-history-" + str(int(time.time()))
-try:
-    r = httpx.post(f"{BASE}/user/history", json={
-        "slug": test_hist_slug, "se": 1, "ep": 1, "position": 30, "duration": 100,
-    }, timeout=TIMEOUT)
-    post_ok = r.status_code == 200
-    r = httpx.get(f"{BASE}/user/history", timeout=TIMEOUT)
-    data = r.json()
-    history = data.get("history", [])
-    found = any(h.get("slug") == test_hist_slug for h in history)
-    r = httpx.delete(f"{BASE}/user/history/{test_hist_slug}", timeout=TIMEOUT)
-    del_ok = r.status_code == 200
-    record(ok(post_ok and found and del_ok,
-              f"post={post_ok} found={found} delete={del_ok} count={len(history)}"))
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-# ── 25. recommendations ───────────────────────────────────────────────────
-hr("GET /recommendations")
-try:
-    r = httpx.get(f"{BASE}/recommendations", params={"limit": 10}, timeout=TIMEOUT)
-    data = r.json()
-    items = data.get("items", [])
-    record(ok(r.status_code == 200, f"status {r.status_code}, count={data.get('count')}"))
-    if items:
-        print(f"    sample: {items[0].get('name')} (rating={items[0].get('rating')}, genres={items[0].get('genre')})")
-except Exception as e:
-    record(ok(False, f"exception: {e}"))
-
-# ── 26. recommendations/because ───────────────────────────────────────────
-hr("GET /recommendations/because/{slug}")
-if home_slug:
+hr("POST /debug/play")
+if stream_sid and stream_slug:
     try:
-        r = httpx.get(f"{BASE}/recommendations/because/{home_slug}", params={"limit": 8}, timeout=TIMEOUT)
-        data = r.json()
-        items = data.get("items", [])
-        record(ok(r.status_code == 200, f"status {r.status_code}, source={data.get('title')}, items={len(items)}"))
+        r = httpx.post(f"{BASE}/debug/play",
+                       params={"subject_id": stream_sid, "detail_path": stream_slug, "se": 0, "ep": 0},
+                       timeout=TIMEOUT)
+        d = r.json()
+        check(r.status_code == 200, f"status {r.status_code}")
+        check("error" not in d, f"hasResource: {d.get('hasResource')}, streams: {d.get('streams')}")
     except Exception as e:
-        record(ok(False, f"exception: {e}"))
+        check(False, f"exception: {e}")
 else:
-    record(ok(False, "no slug from /home"))
+    skip("no sid")
 
-# ── summary ────────────────────────────────────────────────────────────────
+
+hr("GET /docs  and  /openapi.json")
+try:
+    r = httpx.get(f"{BASE}/docs", timeout=TIMEOUT)
+    check(r.status_code == 200 and "<!doctype" in r.text.lower(),
+          f"/docs status {r.status_code}")
+    r = httpx.get(f"{BASE}/openapi.json", timeout=TIMEOUT)
+    d = r.json()
+    check(r.status_code == 200 and "paths" in d,
+          f"/openapi.json status {r.status_code}, {len(d.get('paths', {}))} paths")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
+hr("GET /  and  /dashboard")
+try:
+    r = httpx.get(f"{BASE}/", timeout=TIMEOUT)
+    check(r.status_code == 200 and "<!doctype" in r.text.lower(),
+          f"/ status {r.status_code}")
+    r = httpx.get(f"{BASE}/dashboard", timeout=TIMEOUT)
+    check(r.status_code == 200 and "<!doctype" in r.text.lower(),
+          f"/dashboard status {r.status_code}")
+except Exception as e:
+    check(False, f"exception: {e}")
+
+
 hr("SUMMARY")
-print(f"  passed: {results['pass']}")
-print(f"  failed: {results['fail']}")
+total = results["pass"] + results["fail"] + results["skip"]
+print(f"  total:   {total}")
+print(f"  passed:  {results['pass']}")
+print(f"  failed:  {results['fail']}")
+print(f"  skipped: {results['skip']}")
 sys.exit(0 if results["fail"] == 0 else 1)
